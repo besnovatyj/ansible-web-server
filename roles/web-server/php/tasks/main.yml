@@ -1,0 +1,112 @@
+---
+- name: Install software-properties-common
+  apt:
+    name: software-properties-common
+    state: present
+    update_cache: yes
+
+# Неофициальный репозиторий, хотя и проверенный, использовать если нет пакетов в обычном репозитории.
+- name: Add ondrej repository
+  apt_repository:
+    repo: 'ppa:ondrej/php'
+    state: present
+    filename: ondrej
+    update_cache: yes
+
+# Imagick: Пакет php8.3-imagick может потребовать предварительной установки imagemagick. Если возникают проблемы, проверьте наличие пакета в репозитории или добавьте задачу для установки зависимостей:
+#- name: Install ImageMagick dependencies
+#  ansible.builtin.apt:
+#    name:
+#      - libmagickwand-dev
+#      - libmagickcore-dev
+#    state: present
+
+- name: Install ImageMagick
+  apt:
+    name: imagemagick
+    state: present
+
+- name: Install PHP
+  apt:
+    update_cache: yes
+    state: present
+    autoclean: yes
+    name: "{{ php_modules }}"
+  notify: Restart PHP-FPM
+#  retries: 5
+#  delay: 5
+
+- name: Ensure required PHP modules are enabled (if needed)
+  command: phpenmod {{ item }}
+  loop:
+    - apcu
+    - opcache
+    - imagick
+    - memcached
+    - simplexml
+    - pdo
+  args:
+    creates: "/etc/php/{{ php-version }}/mods-available/{{ item }}.ini"
+
+#- name: Enable opcache extension
+#  ansible.builtin.lineinfile:
+#    path: /etc/php/{{ php-version }}/fpm/php.ini
+#    line: "zend_extension=opcache.so"
+#    state: present
+#  notify: Restart PHP-FPM
+
+- name: Configure PHP error_log to syslog
+  ansible.builtin.lineinfile:
+    path: /etc/php/{{ php-version }}/fpm/php.ini
+    line: "error_log = syslog"
+    state: present
+  notify: Restart PHP-FPM
+
+#- name: Configure PHP-FPM global settings
+#  template:
+#    src: php-fpm.conf.j2
+#    dest: /etc/php/{{ php-version }}/fpm/php-fpm.conf
+#    owner: root
+#    group: root
+#    mode: '0644'
+#    backup: yes
+#  notify: Restart PHP-FPM
+
+- name: Copy PHP configuration files from files/conf.d
+  ansible.builtin.copy:
+    src: files/conf.d/
+    dest: /etc/php/{{ php-version }}/fpm/conf.d/
+    owner: www-data
+    group: www-data
+    mode: '0644'
+    directory_mode: '0755'
+  notify: Restart PHP-FPM
+
+- name: Copy and process PHP configuration templates from templates/conf.d
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "/etc/php/{{ php-version }}/fpm/conf.d/{{ item | basename | regex_replace('.j2$', '') }}"
+    owner: www-data
+    group: www-data
+    mode: '0644'
+  loop: "{{ query('fileglob', 'templates/conf.d/*.j2') }}"
+  notify: Restart PHP-FPM
+
+- name: Create PHP-FPM slowlog file
+  file:
+    path: /var/log/php{{ php-version }}-fpm-slow.log
+    owner: www-data
+    group: www-data
+    mode: '0640'
+    state: touch
+  notify: Restart PHP-FPM
+
+- name: Настройка PHP-FPM для низкой памяти
+  template:
+    src: www.conf.j2
+    dest: /etc/php/{{ php-version }}/fpm/pool.d/www.conf
+    owner: www-data
+    group: www-data
+    mode: '0644'
+    backup: yes
+  notify: Restart PHP-FPM

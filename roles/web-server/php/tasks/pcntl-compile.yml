@@ -1,0 +1,54 @@
+---
+#==================
+# Модуль pcntl: Этот модуль поддерживается только в CLI-версии PHP, а не в PHP-FPM,
+# так как он предназначен для управления процессами и не безопасен для использования в веб-серверах.
+# Убедитесь, что он нужен именно для CLI-скриптов. Если вы используете PHP-FPM, pcntl может не работать.
+# ---
+# В Ubuntu в пакете php8.3-cli модуль pcntl уже встроен.
+# Он не нужен для FPM (веб-сервера), так как управление процессами внутри веб-запроса нестабильно,
+# а для консольных скриптов (CLI) он есть "из коробки".
+#==================
+- name: Install dependencies for compiling PHP pcntl
+  ansible.builtin.apt:
+    name:
+      - php{{ php-version }}-dev  # Необходим для компиляции расширений
+      - build-essential
+      - libpcre3-dev
+    state: present
+    update_cache: yes
+
+- name: Download PHP source code
+  ansible.builtin.get_url:
+    url: https://www.php.net/distributions/php-{{ php-version }}.tar.gz
+    dest: /tmp/php-{{ php-version }}.tar.gz
+    mode: '0644'
+
+- name: Extract PHP source code
+  ansible.builtin.unarchive:
+    src: /tmp/php-{{ php-version }}.tar.gz
+    dest: /tmp
+    remote_src: yes
+
+- name: Compile pcntl extension
+  ansible.builtin.shell: |
+    cd /tmp/php-{{ php-version }}/ext/pcntl
+    phpize
+    ./configure
+    make
+    make install
+  args:
+    executable: /bin/bash
+  register: pcntl_compile
+  changed_when: pcntl_compile.rc == 0
+
+- name: Enable pcntl extension
+  ansible.builtin.lineinfile:
+    path: /etc/php/{{ php-version }}/cli/php.ini
+    line: "extension=pcntl.so"
+    state: present
+  notify: Restart PHP-FPM
+
+- name: Clean up PHP source code
+  ansible.builtin.file:
+    path: /tmp/php-{{ php-version }}
+    state: absent

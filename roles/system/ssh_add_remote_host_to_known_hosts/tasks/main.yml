@@ -1,0 +1,21 @@
+# Обновление known_hosts предотвращает MITM-атаки ("человек посередине")
+---
+# Удаление старой записи (аналог ssh-keygen -R)
+- name: Remove old host entry from known_hosts
+  ansible.builtin.known_hosts:
+    path: "{{ ssh_known_hosts_path }}"
+    name: "{{ target_host }}"
+    state: absent
+#    - name: Remove old host entry from known_hosts
+#      shell: ssh-keygen -R "{{ target_host }}" -f "{{ ssh_known_hosts_path }}"
+#      ignore_errors: true
+
+# Добавление новой записи (сканирование ключей и добавление)
+- name: Add target host to known_hosts
+  known_hosts:
+    path: "{{ ssh_known_hosts_path }}"
+    name: "{{ target_host }}"
+    key: "{{ lookup('pipe', 'ssh-keyscan -H -t rsa,ecdsa {{ target_host }}') }}"  # Сканирует и хэширует ключи
+    state: present
+#    - name: Add target host to known_hosts
+#      shell: ssh-keyscan -H -t rsa,ecdsa "{{ target_host }}" >> "{{ ssh_known_hosts_path }}"

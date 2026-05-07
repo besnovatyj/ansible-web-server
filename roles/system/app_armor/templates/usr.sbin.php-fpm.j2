@@ -1,0 +1,16 @@
+#include <tunables/global>
+
+/usr/sbin/php-fpm{{ php-version }} {
+  #include <abstractions/base>
+  #include <abstractions/php>
+
+  capability dac_override,
+  capability sys_resource,
+
+  /etc/php/{{ php-version }}/fpm/** r,
+  /var/www/** rwk,  # Доступ к веб-файлам
+  /run/php/php{{ php-version }}-fpm.sock rw,
+  /usr/sbin/php-fpm{{ php-version }} ix,
+  /var/log/php{{ php-version }}-fpm.log rw,
+  deny /etc/shadow r,  # Ограничение чувствительных файлов # * **Риск:** `deny /etc/passwd r` для Nginx или PHP-FPM может сломать функции, требующие определения пользователя (например, `getpwuid`), которые часто используются в библиотеках или самом процессе запуска (смена юзера с root на www-data). * **Рекомендация:** Сначала запустите AppArmor в режиме `complain` (логирование нарушений без блокировки), посмотрите логи `dmesg`, и только потом включайте `enforce`. Жесткая блокировка чтения `/etc/passwd` часто приводит к "мистическим" падениям сервисов.
+}

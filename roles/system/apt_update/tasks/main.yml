@@ -1,0 +1,39 @@
+---
+- name: Update APT package cache
+  become: true
+  apt:
+    update_cache: yes # обновляет кэш APT (список доступных пакетов)
+    cache_valid_time: 86400  # One day (кэш обновляется, только если он старше 24 часов (идемпотентность))
+
+- name: Install security updates only
+  become: true
+  apt:
+    upgrade: safe  # Безопасное обновление, не удаляет пакеты (выполняет обновление установленных пакетов без удаления или установки новых зависимостей (аналог apt upgrade, а не apt full-upgrade).)
+    only_upgrade: true  # Только обновление установленных пакетов (обновляет только уже установленные пакеты, не добавляя новых.)
+    default_release: "{{ ansible_distribution_release }}-security"  # Только security-репозиторий (ограничивает обновления только пакетами из security-репозитория Ubuntu (например, noble-security для Ubuntu 24.04). Это минимизирует изменения, так как применяются только патчи безопасности. `{{ ansible_distribution_release }}` - факт ансибл, указывать вручную не нужно)
+  register: apt_update_result # для отладки, если нужно проверить, какие пакеты обновились.
+
+- name: Wait for system apt locks to be released
+  shell: while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done;
+
+- name: Check if reboot is required
+  become: true
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: reboot_required
+
+- name: Reboot server if needed
+  become: true
+  ansible.builtin.reboot:
+    reboot_timeout: 300
+  when: reboot_required.stat.exists
+
+# Полное обновление, включая все дистрибутивы, может поломать что-нибудь
+#- name: Update APT package cache
+#  become: true
+#  apt:
+#    update_cache: yes
+#    upgrade: dist  # Полное обновление
+#    state: latest
+#    cache_valid_time: 86400 #One day
+

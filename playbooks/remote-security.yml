@@ -1,0 +1,22 @@
+##########################################################
+#
+# Настройка доступа к удалённому серверу по ключам
+# 1) Полное обновление системы
+# 2) Создание пользователя с sudo-правами и копирование SSH ключей для него
+# 3) Копирование публичных ключей для root
+# 4) Настройки безопасности и логирования SSH
+#
+##########################################################
+---
+- name: Basic server configuration
+  hosts: site
+  remote_user: root
+  become: true
+  vars_files:
+    - ../secrets/secrets.vault
+    - ../group_vars/global.yml
+  roles:
+    - ../roles/system/user_sudo_add_new
+    - ../roles/system/ssh_remote_root_keys
+    - ../roles/system/ssh_remote_security
+    - ../roles/system/ssh_logs_journald

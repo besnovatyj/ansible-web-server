@@ -1,0 +1,26 @@
+---
+- name: Set timezone
+  timezone:
+    name: "{{ time_zone }}"
+
+- name: Install locales apt
+  apt:
+    name: locales
+    state: present
+    update_cache: yes
+
+- name: Ensure the locale exists
+  locale_gen:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - "{{ locale1 }}"
+    - "{{ locale2 }}"
+
+- name: Set locale settings
+  shell:
+    cmd: 'locale-gen {{ locale1 }} && LANG={{ locale2 }} LC_TIME="{{ locale1 }}" && update-locale'
+
+- name: Set hostname
+  shell:
+    cmd: "hostnamectl set-hostname {{ DOMAIN_NAME }}"

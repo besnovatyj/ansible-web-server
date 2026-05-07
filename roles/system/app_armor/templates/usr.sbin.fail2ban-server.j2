@@ -1,0 +1,15 @@
+#include <tunables/global>
+/usr/bin/fail2ban-server {
+  #include <abstractions/base>
+  capability dac_override,
+  /var/log/fail2ban.log* rw,
+  /var/run/fail2ban/* rw,
+  /etc/fail2ban/** r,
+  /usr/bin/fail2ban-server ix,
+  /var/log/nginx/* r,
+  /var/log/mysql/* r,
+  /var/log/redis/* r,
+  /var/log/auth.log r,
+  /usr/sbin/ufw w, # Поскольку fail2ban использует UFW (banaction = ufw), убедитесь, что профиль AppArmor для fail2ban разрешает выполнение команд UFW
+  deny /etc/shadow r, # * **Риск:** `deny /etc/passwd r` для Nginx или PHP-FPM может сломать функции, требующие определения пользователя (например, `getpwuid`), которые часто используются в библиотеках или самом процессе запуска (смена юзера с root на www-data). * **Рекомендация:** Сначала запустите AppArmor в режиме `complain` (логирование нарушений без блокировки), посмотрите логи `dmesg`, и только потом включайте `enforce`. Жесткая блокировка чтения `/etc/passwd` часто приводит к "мистическим" падениям сервисов.
+}

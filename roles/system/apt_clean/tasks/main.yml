@@ -1,0 +1,10 @@
+---
+# Очищает кэш APT от устаревших .deb-файлов
+- name: Remove useless packages
+  apt:
+    autoclean: yes
+
+# Удаляет ненужные зависимости, которые больше не требуются
+- name: Remove useless dependencies
+  apt:
+    autoremove: yes

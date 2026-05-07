@@ -1,0 +1,75 @@
+---
+- name: Ensure fail2ban is installed # fail2ban-client version
+  apt:
+#    name: "fail2ban={{ fail2ban_version }}" # v=1.0.2 Предустановлена в Ubuntu 24.04.3 (Noble Numbat). При попытке установить любую версию показывает ошибку что дистрибутив не найден в репозитории
+    name: fail2ban
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+  notify:
+    - restart fail2ban
+
+- name: Ensure fail2ban is configured
+  template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload fail2ban
+
+# Fail2ban потребляет минимальные ресурсы (обычно <50 МБ ОЗУ), что делает его подходящим для сервера с 2 ГБ памяти. Однако при большом количестве логов (например, если включены все jails для Nginx, MySQL, и т.д.) и активном мониторинге может возрасти нагрузка. Рекомендую настроить loglevel в /etc/fail2ban/fail2ban.conf на INFO или WARNING, чтобы избежать чрезмерного логирования (как указано в вашем jail.local для рецидивистов).
+- name: Configure fail2ban loglevel
+  lineinfile:
+    path: /etc/fail2ban/fail2ban.conf
+    regexp: '^loglevel\s*='
+    line: 'loglevel = WARNING'
+    state: present
+  notify: restart fail2ban
+
+# Для recidive увеличьте dbpurgeage в /etc/fail2ban/fail2ban.conf до 7–14 дней (648000–1209600 секунд), как указано в комментариях, чтобы база данных SQLite не разрасталась и не потребляла лишнюю память.
+- name: Configure fail2ban dbpurgeage
+  lineinfile:
+    path: /etc/fail2ban/fail2ban.conf
+    regexp: '^dbpurgeage\s*='
+    line: 'dbpurgeage = 648000'  # 7 дней в секундах
+    state: present
+  notify: restart fail2ban
+
+- name: Create Redis auth filter
+  template:
+    src: filter.d/redis-auth.conf.j2
+    dest: /etc/fail2ban/filter.d/redis-auth.conf
+    owner: root
+    group: root
+    mode: 0644
+  notify: reload fail2ban
+
+- name: Create PHP-FPM filter
+  template:
+    src: filter.d/php-fpm.conf.j2
+    dest: /etc/fail2ban/filter.d/php-fpm.conf
+    owner: root
+    group: root
+    mode: 0644
+  notify: reload fail2ban
+
+- name: Ensure fail2ban starts on a fresh reboot
+  service: name=fail2ban state=started enabled=yes
+
+#- name: Check fail2ban status
+#  ansible.builtin.command: fail2ban-client status
+#  register: fail2ban_status
+
+#- name: Display fail2ban status
+#  ansible.builtin.debug:
+#    var: fail2ban_status.stdout_lines
+
+#- name: Check fail2ban status sshd
+#  ansible.builtin.command: fail2ban-client status sshd
+#  register: fail2ban_status_sshd
+
+#- name: Display sshd status
+#  ansible.builtin.debug:
+#    var: fail2ban_status_sshd.stdout_lines

@@ -1,0 +1,17 @@
+[Unit]
+Description=Yii Queue Worker %I
+After=network.target
+# Ниже указана зависимость от redis. Это справедливо если вы используете очереди на основе redis.
+# Если ваш проект использует другой брокер очередей, нужно изменить или дополнить эту секцию.
+After=redis.service
+Requires=redis.service
+
+[Service]
+User=www-data
+Group=www-data
+ExecStart=/usr/bin/php {{ item.web_root }}/{{ item.DOMAIN_NAME }}/yii queue/listen --verbose
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+

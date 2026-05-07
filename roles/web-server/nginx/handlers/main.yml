@@ -1,0 +1,13 @@
+---
+- name: Ensure nginx is started and enabled
+  ansible.builtin.systemd:
+    name: nginx
+    state: started # Проверяем, что nginx запущен
+    enabled: yes   # и доступен
+
+- name: Restart nginx
+  ansible.builtin.systemd:
+    name: nginx
+    state: restarted
+    daemon_reload: yes
+

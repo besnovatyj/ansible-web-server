@@ -1,0 +1,12 @@
+---
+
+# Test SSH connection with new keys под root
+- name: Test SSH connection as root
+  wait_for_connection:
+    delay: 5
+    timeout: 30
+  vars:
+    ansible_user: "root"
+  delegate_to: localhost  # Тест с localhost под root
+  run_once: true  # Только один раз
+  changed_when: false # Нужно ли?

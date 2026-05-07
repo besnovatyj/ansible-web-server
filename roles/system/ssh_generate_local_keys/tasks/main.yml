@@ -1,0 +1,170 @@
+##
+# 1. Проверяется существование директории для ключей.
+# 2. Получается текущая дата/время для именования бэкапов.
+# 3. Для каждой пары ключей (обычной и аварийной):
+#   - Проверяется существование приватного и публичного ключей.
+#   - Создаются резервные копии, если ключи существуют и включена принудительная перегенерация.
+#   - Проверяется успешность создания бэкапов.
+#   - Генерируются новые ключи, если хотя бы один из ключей отсутствует или если бэкапы созданы и включена принудительная перегенерация.
+# 4. Выводится отладочная информация.
+##
+---
+
+- name: Ensure SSH keys directory exists locally
+  file:
+    path: "{{ local_ssh_keys_dir }}"
+    state: directory
+    mode: '0700'  # Безопасные права для директории
+
+#    TODO Если нижний вариант заработает, то закомментированный можно будет удалить (В закомментированном значение извлекается так - current_datetime.stdout).
+# - name: Get current datetime for backups if force_key_regen is true
+#   command: date +%Y-%m-%d_%H-%M-%S
+#   register: current_datetime
+#   changed_when: false
+#   when: force_key_regen | bool
+- name: Set current datetime for backups (ГГГГ-ММ-ДД_ЧЧ-ММ-СС)
+  set_fact:
+    current_datetime: "{{ ansible_date_time.iso8601 | regex_replace(':', '-') | regex_replace('T', '_') | regex_replace('\\..*', '') }}"
+  when: force_key_regen | bool
+
+# Обычная пара ключей
+- name: Check if ordinary private key exists
+  stat:
+    path: "{{ ordinary_key_path }}"
+  register: ordinary_private_key
+
+- name: Check if ordinary public key exists
+  stat:
+    path: "{{ ordinary_pubkey_path }}"
+  register: ordinary_public_key
+
+- block:
+    - name: Backup ordinary private key if exists and force_key_regen is true
+      copy:
+        src: "{{ ordinary_key_path }}"
+        dest: "{{ ordinary_key_path }}.{{ current_datetime }}.bak"
+    - name: Verify ordinary private key backup exists
+      stat:
+        path: "{{ ordinary_key_path }}.{{ current_datetime }}.bak"
+      register: backup_ordinary_private_stat
+      failed_when: not backup_ordinary_private_stat.stat.exists
+  rescue:
+    - name: Fail if backup of ordinary private key fails
+      fail:
+        msg: "Failed to create or verify backup of ordinary private key"
+  when: force_key_regen | bool and ordinary_private_key.stat.exists
+
+- block:
+    - name: Backup ordinary public key if exists and force_key_regen is true
+      copy:
+        src: "{{ ordinary_pubkey_path }}"
+        dest: "{{ ordinary_pubkey_path }}.{{ current_datetime }}.bak"
+    - name: Verify ordinary public key backup exists
+      stat:
+        path: "{{ ordinary_pubkey_path }}.{{ current_datetime }}.bak"
+      register: backup_ordinary_public_stat
+      failed_when: not backup_ordinary_public_stat.stat.exists
+  rescue:
+    - name: Fail if backup of ordinary public key fails
+      fail:
+        msg: "Failed to create or verify backup of ordinary public key"
+  when: force_key_regen | bool and ordinary_public_key.stat.exists
+
+- name: Generate ordinary SSH keypair (only if not exists or force_key_regen)
+  community.crypto.openssh_keypair:
+    path: "{{ ordinary_key_path }}"
+    type: "{{ ssh_key_type }}"  # ed25519 или rsa
+    size: "{{ ssh_key_size }}"  # 0 для ed25519, 4096 для rsa
+    passphrase: "{{ ssh_key_passphrase }}"  # Из vault
+    force: "{{ force_key_regen | default(false) }}"  # Перезаписывать только если force=true
+    state: present
+  when:
+    # Генерация ключей выполняется, если хотя бы один из ключей (приватный или публичный) не существует.
+    # Это позволяет создать новую пару ключей, если один из файлов отсутствует
+    # (например, если есть только приватный ключ, но нет публичного).
+    - not ordinary_private_key.stat.exists | default(false) or not ordinary_public_key.stat.exists | default(false) or
+     (force_key_regen | bool and (backup_ordinary_private_stat.stat.exists | default(false)) and (backup_ordinary_public_stat.stat.exists | default(false)))
+    # Если вы хотите быть более строгими и генерировать ключи только в случае,
+    # когда оба ключа отсутствуют (а не хотя бы один), можно изменить условие следующим образом:
+    #- not (ordinary_private_key.stat.exists | default(false) and ordinary_public_key.stat.exists | default(false)) or
+    #  (force_key_regen | bool and (backup_ordinary_private_stat.stat.exists | default(false)) and (backup_ordinary_public_stat.stat.exists | default(false)))
+
+- name: Debug key and backup status
+  debug: # При желании можно вывести ещё и путь к файлам ключей
+    msg: |
+      Private ordinary key exists: {{ ordinary_private_key.stat.exists | default(false) }}
+      Public ordinary key exists: {{ ordinary_public_key.stat.exists | default(false) }}
+      Private ordinary key backup exists: {{ backup_ordinary_private_stat.stat.exists | default(false) }}
+      Public ordinary key backup exists: {{ backup_ordinary_public_stat.stat.exists | default(false) }}
+      Keys directory: {{ local_ssh_keys_dir }}
+
+# Аварийная пара ключей для root
+- name: Check if emergency private key exists
+  stat:
+    path: "{{ emergency_key_path }}"
+  register: emergency_private_key
+
+- name: Check if emergency public key exists
+  stat:
+    path: "{{ emergency_pubkey_path }}"
+  register: emergency_public_key
+
+- block:
+    - name: Backup emergency private key if exists and force_key_regen is true
+      copy:
+        src: "{{ emergency_key_path }}"
+        dest: "{{ emergency_key_path }}.{{ current_datetime }}.bak"
+    - name: Verify emergency private key backup exists
+      stat:
+        path: "{{ emergency_key_path }}.{{ current_datetime }}.bak"
+      register: backup_emergency_private_stat
+      failed_when: not backup_emergency_private_stat.stat.exists
+  rescue:
+    - name: Fail if backup of emergency private key fails
+      fail:
+        msg: "Failed to create or verify backup of emergency private key"
+  when: force_key_regen | bool and emergency_private_key.stat.exists
+
+- block:
+    - name: Backup emergency public key if exists and force_key_regen is true
+      copy:
+        src: "{{ emergency_pubkey_path }}"
+        dest: "{{ emergency_pubkey_path }}.{{ current_datetime }}.bak"
+    - name: Verify emergency public key backup exists
+      stat:
+        path: "{{ emergency_pubkey_path }}.{{ current_datetime }}.bak"
+      register: backup_emergency_public_stat
+      failed_when: not backup_emergency_public_stat.stat.exists
+  rescue:
+    - name: Fail if backup of emergency public key fails
+      fail:
+        msg: "Failed to create or verify backup of emergency public key"
+  when: force_key_regen | bool and emergency_public_key.stat.exists
+
+- name: Generate emergency SSH keypair for root (only if not exists or force_key_regen)
+  community.crypto.openssh_keypair:
+    path: "{{ emergency_key_path }}"
+    type: "{{ ssh_key_type }}"  # ed25519 или rsa
+    size: "{{ ssh_key_size }}"  # 0 для ed25519, 4096 для rsa
+    passphrase: "{{ ssh_key_passphrase }}"  # Из vault
+    force: "{{ force_key_regen | default(false) }}"  # Перезаписывать только если force=true
+    state: present
+  when:
+    # Генерация ключей выполняется, если хотя бы один из ключей (приватный или публичный) не существует.
+    # Это позволяет создать новую пару ключей, если один из файлов отсутствует (например,
+    # если есть только приватный ключ, но нет публичного).
+    - not emergency_private_key.stat.exists | default(false) or not emergency_public_key.stat.exists | default(false) or
+      (force_key_regen | bool and (backup_emergency_private_stat.stat.exists | default(false)) and (backup_emergency_public_stat.stat.exists | default(false)))
+    # Если вы хотите быть более строгими и генерировать ключи только в случае,
+    # когда оба ключа отсутствуют (а не хотя бы один), можно изменить условие следующим образом:
+    #- not (emergency_private_key.stat.exists and emergency_public_key.stat.exists) or
+    #  (force_key_regen | bool and (backup_emergency_private_stat.stat.exists | default(false)) and (backup_emergency_public_stat.stat.exists | default(false)))
+
+- name: Debug key and backup status
+  debug: # При желании можно вывести ещё и путь к файлам ключей
+    msg: |
+      Private emergency key exists: {{ emergency_private_key.stat.exists | default(false) }}
+      Public emergency key exists: {{ emergency_public_key.stat.exists | default(false) }}
+      Private emergency key backup exists: {{ backup_emergency_private_stat.stat.exists | default(false) }}
+      Public emergency key backup exists: {{ backup_emergency_public_stat.stat.exists | default(false) }}
+      Keys directory: {{ local_ssh_keys_dir }}

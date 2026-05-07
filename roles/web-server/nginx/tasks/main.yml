@@ -1,0 +1,87 @@
+---
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: yes
+  register: apt_result
+  until: apt_result is success
+  retries: 5       # Попробовать 5 раз
+  delay: 10        # Ждать 10 секунд между попытками
+  notify: Ensure nginx is started and enabled
+
+- name: Настройка Nginx для низкой памяти
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    backup: yes
+  notify: Restart nginx
+
+- name: Copy host settings
+  ansible.builtin.template:
+    src: site.tmp.j2
+    dest: "/etc/nginx/sites-available/{{ DOMAIN_NAME }}.conf"
+    owner: root
+    group: root
+    mode: 0644
+  notify: Restart nginx
+
+- name: Create host available to enabled symbolic link
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ DOMAIN_NAME }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ DOMAIN_NAME }}.conf"
+    state: link
+  notify: Restart nginx
+
+# Создаём директорию для файла перезаписи настроек `systemd unit` для nginx
+- name: Create nginx systemd override directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/nginx.service.d
+    state: directory
+    mode: 0755
+  notify: Restart nginx
+
+# Создаём файл, который перезапишет настройки юнита systemd для nginx, чтобы логи писались в systemd-journal
+- name: Configure nginx to log to journald
+  copy:
+    dest: /etc/systemd/system/nginx.service.d/override.conf
+    content: |
+      [Service]
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=nginx
+    mode: 0644
+  notify: Restart nginx
+
+# Перезагружаем конфигурацию systemd перед тестированием Nginx
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Test Nginx configuration
+  ansible.builtin.command: nginx -t
+  check_mode: no
+  changed_when: false
+  notify: Restart nginx
+
+# Убедитесь, что директории, указанные в site.tmp.j2 (например, /var/www/{{ DOMAIN_NAME }}/app/frontend/pub/), существуют и имеют правильные права:
+# Если директории отсутствуют, добавьте задачу для их создания:
+#- name: Create web root directories
+#  ansible.builtin.file:
+#    path: "{{ web_root }}/{{ DOMAIN_NAME }}/app/{{ item }}"
+#    state: directory
+#    owner: www-data
+#    group: www-data
+#    mode: 0755
+#  loop:
+#    - frontend/pub
+#    - backend/pub
+#    - static
+
+# Добавьте отладочную задачу для вывода статуса Nginx в случае сбоя nginx -t:
+#- name: Debug Nginx configuration test failure
+#  ansible.builtin.debug:
+#    msg: "{{ nginx_test.stderr_lines }}"
+#  when: nginx_test.rc != 0
+#  vars:
+#    nginx_test: "{{ ansible_failed_result }}"

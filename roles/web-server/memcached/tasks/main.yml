@@ -1,0 +1,22 @@
+---
+- name: Ensure Memcached is present
+  become: true
+  apt:
+    name: "memcached"
+    state: present
+    update_cache: yes
+  register: apt_result
+  until: apt_result is success
+  retries: 5       # Попробовать 5 раз
+  delay: 10        # Ждать 10 секунд между попытками
+  notify: Start memcached on boot
+
+- name: Configure Memcached
+  become: true
+  template:
+    src: memcached.conf.j2
+    dest: /etc/memcached.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Start memcached on boot

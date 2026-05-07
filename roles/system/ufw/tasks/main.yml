@@ -1,0 +1,50 @@
+##########################################################
+#
+# Разрешаем только входящие соединения на порты 22, 80 и 443 (TCP) и отклоняем все остальные входящие соединения с политикой REJECT.
+# По-умолчанию все исходящие соединения - allow (например при отправке писем через сторонние сервисы)
+#
+##########################################################
+---
+# Устанавливаем, но не включаем
+- name: Install ufw apt
+  apt:
+    name: ufw
+    state: present
+    update_cache: yes
+
+# Это удалит все существующие правила и сбросит UFW к состоянию по умолчанию.
+- name: Reset UFW rules
+  ufw:
+    state: reset
+  become: true
+
+# Порядок важен, сначала разрешаем ТОЛЬКО нужное, после запрещаем всё остальное.
+#  https://stackoverflow.com/a/32276361/5031893
+- name: Allow SSH in UFW
+  ufw:
+    rule: allow
+    port: 22
+    proto: tcp
+  become: true
+
+- name: Allow HTTP in UFW
+  ufw:
+    rule: allow
+    port: 80
+    proto: tcp
+  become: true
+
+- name: Allow HTTPS in UFW
+  ufw:
+    rule: allow
+    port: 443
+    proto: tcp
+  become: true
+
+# Включаем и отклоняем всё что не разрешили выше
+- name: Set firewall default policy
+  ufw:
+    state: enabled
+    policy: reject
+  become: true
+  notify: Reload UFW

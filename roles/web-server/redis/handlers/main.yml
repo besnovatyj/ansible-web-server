@@ -1,0 +1,20 @@
+---
+- name: Start redis on boot
+  become: true
+  systemd:
+    name: redis-server
+    state: started
+    enabled: yes
+
+- name: Reload systemd
+  become: true
+  systemd:
+    daemon_reload: yes
+  notify: Restart redis
+
+- name: Restart redis
+  become: true
+  systemd:
+    name: redis-server
+    state: restarted
+  timeout: 60

@@ -1,0 +1,15 @@
+##########################################################
+#
+# Проверка доступа по ключам
+# 1) Для нового sudo пользователя
+# 2) Для root
+#
+##########################################################
+---
+- name: Basic server configuration
+  hosts: site
+  vars_files:
+    - ../secrets/secrets.vault
+    - ../group_vars/global.yml
+  roles:
+    - ../roles/tests

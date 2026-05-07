@@ -1,0 +1,112 @@
+---
+- name: Установка пакета python3-mysqldb для Debian/Ubuntu (необходим для модулей Ansible)
+  apt:
+    name: python3-mysqldb
+    state: present
+  when: ansible_os_family == 'Debian'
+
+- name: Проверка, является ли установка MySQL свежей
+  stat:
+    path: /var/lib/mysql/mysql # Создается при инициализации базы данных MySQL. Если каталог отсутствует, установка считается свежей.
+  register: mysql_data_dir
+  failed_when: false
+
+- name: Проверка возможности подключения к MySQL с паролем из Vault
+  command: mysql -u root -p"{{ mysql_root_password }}" -e "SELECT 1"
+  register: mysql_connect_check
+  failed_when: false
+  changed_when: false
+  no_log: true
+  when: mysql_data_dir.stat.exists  # Проверять подключение только если MySQL уже инициализирован
+
+- name: Установка пароля и плагина mysql_native_password для root@localhost
+  no_log: true
+  mysql_user:
+    name: root
+    password: "{{ mysql_root_password }}"
+    host: localhost
+    check_implicit_admin: true
+    priv: "*.*:ALL,GRANT"
+    state: present
+    plugin: mysql_native_password
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    # Для свежей установки используем пустой пароль или auth_socket
+    login_user: root
+    login_password: "{{ '' if not mysql_data_dir.stat.exists else mysql_root_password }}"
+  when: not mysql_data_dir.stat.exists or mysql_connect_check.rc != 0
+  register: root_user_update
+
+- name: Ожидание запуска MySQL после установки пароля
+  pause:
+    seconds: 5
+  when: root_user_update is changed
+
+- name: Безопасная настройка MySQL (удаление test БД и анонимных пользователей)
+  block:
+    - name: Проверка существования тестовой базы данных 'test'
+      mysql_db:
+        name: test
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      register: test_db_check
+      check_mode: yes
+      failed_when: false
+      changed_when: false
+      no_log: true
+
+    - name: Удаление тестовой базы данных 'test'
+      mysql_db:
+        name: test
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      when: test_db_check.changed
+      no_log: true
+      ignore_errors: "{{ ansible_check_mode }}"
+
+    - name: Проверка наличия анонимных пользователей
+      mysql_user:
+        name: ''
+        host_all: yes
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      check_mode: yes
+      register: anon_users_check
+      failed_when: false
+      changed_when: false
+      no_log: true
+
+    - name: Удаление всех анонимных пользователей
+      mysql_user:
+        name: ''
+        host_all: yes
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      when: anon_users_check.changed
+      no_log: true
+
+    - name: Удаление дополнительных root-аккаунтов для запрета удалённого доступа
+      mysql_user:
+        name: root
+        host: "{{ item }}"
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      loop:
+        - "::1"
+        - "127.0.0.1"
+        - "{{ ansible_fqdn | default('') }}"  # Если fqdn не определён, пропустить
+        - "{{ inventory_hostname }}"
+        - "{{ ansible_hostname }}"
+        - "%"  # Любые удалённые хосты
+      no_log: true
+      when: item != 'localhost'  # Не удалять localhost
+  when: mysql_root_password is defined  # Выполнять только если пароль сгенерирован

@@ -1,0 +1,30 @@
+---
+- name: Check if swapfile exists
+  stat:
+    path: /swapfile
+  register: swapfile_check
+
+- name: Create swapfile of 2GB if it does not exist
+  command: fallocate -l 2G /swapfile
+  when: not swapfile_check.stat.exists
+
+- name: Set permissions on swapfile
+  file:
+    path: /swapfile
+    mode: '0600'
+  when: not swapfile_check.stat.exists
+
+- name: Format swapfile
+  command: mkswap /swapfile
+  when: not swapfile_check.stat.exists
+
+- name: Activate swapfile
+  command: swapon /swapfile
+  when: not swapfile_check.stat.exists
+
+- name: Add swapfile to /etc/fstab
+  lineinfile:
+    path: /etc/fstab
+    line: '/swapfile none swap sw 0 0'
+    state: present
+  when: not swapfile_check.stat.exists

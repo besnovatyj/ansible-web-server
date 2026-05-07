@@ -1,0 +1,130 @@
+---
+
+##########################################################
+# GLOBAL
+##########################################################
+
+DOMAIN_NAME: domain.zone
+HOST_IP: "{{ hostvars[groups['site'][0]]['ansible_host'] }}"
+web_root: "/var/www"
+locale1: ru_RU.UTF-8
+locale2: en_US.UTF-8
+time_zone: UTC # Asia/Yekaterinburg # Europe/Moscow
+
+##########################################################
+# SYSTEM
+##########################################################
+
+# --------------------------------------------------------
+# SSH-USERS
+# --------------------------------------------------------
+
+############### Общее
+LOCAL_HOME_PATH: "{{ lookup('env', 'HOME') }}"
+force_key_regen: false # true — принудительно регенерировать ключи (бэкапит существующие в той же директории)
+ssh_known_hosts_path: "{{ LOCAL_HOME_PATH }}/.ssh/known_hosts"
+ssh_key_type: "ed25519" # или "rsa" (только если не поддерживается ed25519, например, если версия OpenSSH ниже 6.5)
+ssh_key_size: 0 # Для RSA указать `4096`. Для ed25519 длина фиксированная.
+ssh_key_passphrase: "{{ vault_ssh_key_passphrase }}"
+target_ssh_port: 22 # TODO - лучше потом поменять порт по умолчанию для SSH
+############### Пути к ключам
+local_ssh_keys_dir: "{{ LOCAL_HOME_PATH }}/.ssh"
+# ssh_keys_dir: "{{ ansible_env.HOME }}/.ssh" # ansible_env — это facts целевого хоста, а не контроллера
+ordinary_key_path: "{{ local_ssh_keys_dir }}/key_{{ DOMAIN_NAME }}"
+ordinary_pubkey_path: "{{ ordinary_key_path }}.pub"
+emergency_key_path: "{{ local_ssh_keys_dir }}/key_{{ DOMAIN_NAME }}_emergency_root"
+emergency_pubkey_path: "{{ emergency_key_path }}.pub"
+############### Куда копируем
+target_host: "{{ hostvars[groups['site'][0]]['ansible_host']}}"
+target_user: "{{ hostvars[groups['site'][0]]['ansible_user']}}"
+############### Новый пользователь вместо root
+site_ansible_user: root
+site_ansible_password: "{{ vault_root_password }}"
+site_ansible_key: ~
+new_user: "bes" # Укажите имя нового пользователя
+
+# --------------------------------------------------------
+# FAiLE2BAN
+# --------------------------------------------------------
+
+# fail2ban_version: 1.1.0 # v=1.0.2-3 Предустановлена в Ubuntu 24.04.3 (Noble Numbat). При попытке установить любую версию показывает ошибку что дистрибутив не найден в репозитории
+banTime: 3600 # default - 10m
+findTime: 600 # default - 10m
+maxRetry: 5
+# NB: Защищаем точки входа, а не всё подряд.
+# Если сервис имеет доступ снаружи сервера, тогда защищаем,
+# иначе просто закрываем доступ извне на уровне фаервола.
+jailsEnableStatus:
+  # Предустановленные
+  sshd: true
+  nginx-http-auth: true
+  nginx-limit-req: false # Чтобы включить, сначала прочитай описание в файле конфига
+  nginx-botsearch: true
+  nginx-bad-request: true
+  nginx-forbidden: true
+  php-url-fopen: true
+  vsftpd: false # Не устанавливаем. Зачем, если есть WinSCP
+  mysqld-auth: false # Слушает только localhost
+  traefik-auth: false # Сначала настрой его. :)
+  recidive: true
+  sendmail-auth: false
+  sendmail-reject: false
+  # Добавленные
+  php-fpm: false # Для защиты от брутфорса PHP-приложений. Для этого настройте PHP-FPM на логирование ошибок авторизации в отдельный файл.
+  redis-auth: false # Слушает только localhost
+
+##########################################################
+# WEB-SERVER
+##########################################################
+
+php-version: 8.4 # Стабильная версия из "https://packages.ubuntu.com/" для "Ubuntu 24.04.3 (Noble Numbat)"
+
+# --------------------------------------------------------
+# PHP
+# Проверка доступности пакетов. На сервере выполните:
+# ```php
+# apt update
+# apt search php8.4
+# ```
+# --------------------------------------------------------
+
+php_modules: [
+  "php{{ php-version }}-fpm",
+  "php{{ php-version }}-cli",
+  "php{{ php-version }}-common", # Содержит calendar
+  "php{{ php-version }}-mysqlnd",
+  "php{{ php-version }}-mysql", #  Содержит pdo_mysql
+  "php{{ php-version }}-redis",
+  "php{{ php-version }}-zip",
+  "php{{ php-version }}-gd",
+  "php{{ php-version }}-mbstring",
+  "php{{ php-version }}-curl",
+  "php{{ php-version }}-xml", # Содержит simplexml, dom
+  "php{{ php-version }}-apcu", # Заметки: Версия 5.1.24; для кэширования; включите apcu.enable=1 в php.ini.
+  "php{{ php-version }}-intl", # TODO проверить что работает (должны работать форматтеры Yii2)
+  "php{{ php-version }}-bcmath",
+  "php{{ php-version }}-fileinfo",
+  "php{{ php-version }}-pdo",
+  "php{{ php-version }}-opcache", # Заметки: Включите в php.ini: opcache.enable=1. Конфигурируйте для производительности.
+  "php{{ php-version }}-exif",
+  "php{{ php-version }}-imagick",
+  "php{{ php-version }}-memcached",
+#  "php{{ php-version }}-pcntl" # Этот модуль поддерживается только в CLI-версии PHP, а не в PHP-FPM, так как он предназначен для управления процессами и не безопасен для использования в веб-серверах. Убедитесь, что он нужен именно для CLI-скриптов. Если вы используете PHP-FPM, pcntl может не работать.
+]
+
+# --------------------------------------------------------
+# MYSQL
+# --------------------------------------------------------
+
+mysql_db_name: mysql_db_name
+mysql_db_user: mysql_db_user
+mysql_db_user_password: "{{ vault_mysql_db_user_password }}"
+mysql_root_password : "{{ vault_mysql_root_password }}"
+
+# --------------------------------------------------------
+# CERTBOT
+# --------------------------------------------------------
+
+certbot_email: 'name@domain.zone'
+
+...

@@ -1,0 +1,75 @@
+---
+#Configure AppArmor for Nginx, PHP-FPM, MySQL, and Redis
+- name: Install AppArmor packages
+  apt:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - apparmor
+    - apparmor-utils
+    - apparmor-profiles
+
+# Профиль для Nginx
+- name: Create AppArmor profile for Nginx
+  template:
+    src: usr.sbin.nginx.j2
+    dest: /etc/apparmor.d/usr.sbin.nginx
+    mode: '0644'
+  notify: Reload AppArmor
+
+- name: Enforce Nginx profile
+  command: aa-enforce /etc/apparmor.d/usr.sbin.nginx
+  ignore_errors: true  # Если уже в enforce, игнорировать
+  notify: Reload AppArmor
+
+# Профиль для PHP-FPM (основной процесс)
+- name: Create AppArmor profile for PHP-FPM
+  template:
+    src: usr.sbin.php-fpm.j2
+    dest: /etc/apparmor.d/usr.sbin.php-fpm{{ php-version }}
+    mode: '0644'
+  notify: Reload AppArmor
+
+- name: Enforce PHP-FPM profile
+  command: aa-enforce /etc/apparmor.d/usr.sbin.php-fpm{{ php-version }}
+  ignore_errors: true
+  notify: Reload AppArmor
+
+# Профиль для MySQL
+- name: Create AppArmor profile for MySQL
+  template:
+    src: usr.sbin.mysqld.j2
+    dest: /etc/apparmor.d/usr.sbin.mysqld
+    mode: '0644'
+  notify: Reload AppArmor
+
+- name: Enforce MySQL profile
+  command: aa-enforce /etc/apparmor.d/usr.sbin.mysqld
+  ignore_errors: true
+  notify: Reload AppArmor
+
+# Профиль для Redis
+- name: Create AppArmor profile for Redis
+  template:
+    src: usr.bin.redis-server.j2
+    dest: /etc/apparmor.d/usr.bin.redis-server
+    mode: '0644'
+  notify: Reload AppArmor
+
+- name: Enforce Redis profile
+  command: aa-enforce /etc/apparmor.d/usr.bin.redis-server
+  ignore_errors: true
+  notify: Reload AppArmor
+
+# Профиль для fail2ban
+- name: Create AppArmor profile for fail2ban
+  template:
+    src: usr.sbin.fail2ban-server.j2
+    dest: /etc/apparmor.d/usr.sbin.fail2ban-server
+    mode: '0644'
+  notify: Reload AppArmor
+
+- name: Enforce fail2ban profile
+  command: aa-enforce /etc/apparmor.d/usr.sbin.fail2ban-server
+  ignore_errors: true
+  notify: Reload AppArmor

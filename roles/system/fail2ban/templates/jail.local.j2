@@ -1,0 +1,101 @@
+################################################################################
+# ЗАМЕТКА
+################################################################################
+# ---
+# ВНИМАНИЕ: в версии 0.9.0 был проведен серьезный рефакторинг.
+#           Смотрим Вики:
+#           https://github.com/fail2ban/fail2ban/wiki
+#           Или смотрим оригинальный конфиг:
+#           https://github.com/fail2ban/fail2ban/blob/master/config/jail.conf
+# ---
+# Комментарии: используйте '#' чтобы закомментировать строку целиком
+# или ';' (после пробела) для встроенных комментариев.
+# ---
+
+################################################################################
+# DEFAULT
+################################################################################
+# Секция DEFAULT позволяет задать глобальные параметры.
+# Они могут быть перезаписаны впоследствии в каждой jail.
+
+[DEFAULT]
+
+#
+# MISCELLANEOUS OPTIONS
+#
+
+bantime.increment = true
+bantime.rndtime = 30m
+bantime.maxtime = 60d
+bantime.factor = 2
+bantime.formula = ban.Time * (1<<(ban.Count if ban.Count<20 else 20)) * banFactor
+bantime.overalljails = true
+ignorecommand =
+bantime = {{ banTime }} ; Минимальное время блокировки хоста
+findtime = {{ findTime }} ; Время подсчёта попыток для включения бана
+maxretry = {{ maxRetry }} ; Кол-во попыток за время findtime, после которых бан
+backend = systemd ; Для этого необходимо у всех отслеживаемых программ направить логи в systemd
+enabled = false ; По умолчанию все jails выключены
+
+#
+# ACTIONS
+#
+
+banaction = ufw ; default `iptables-multiport`
+banaction_allports = ufw ; default `iptables-allports`
+
+################################################################################
+# JAILS
+################################################################################
+
+#
+# Предустановленные
+#
+
+[sshd]
+enabled = {{ jailsEnableStatus.sshd| bool | lower }}
+
+[nginx-http-auth]
+enabled = {{ jailsEnableStatus['nginx-http-auth'] | bool | lower }}
+
+[nginx-limit-req]
+enabled = {{ jailsEnableStatus['nginx-limit-req'] | bool | lower }}
+
+[nginx-botsearch]
+enabled = {{ jailsEnableStatus['nginx-botsearch'] | bool | lower }}
+
+[nginx-bad-request]
+enabled = {{ jailsEnableStatus['nginx-bad-request'] | bool | lower }}
+
+[nginx-forbidden]
+enabled = {{ jailsEnableStatus['nginx-forbidden'] | bool | lower }}
+
+[php-url-fopen]
+enabled = {{ jailsEnableStatus['php-url-fopen'] | bool | lower }}
+
+[sendmail-auth]
+enabled = {{ jailsEnableStatus['sendmail-auth'] | bool | lower }}
+
+[sendmail-reject]
+enabled = {{ jailsEnableStatus['sendmail-reject'] | bool | lower }}
+
+[recidive]
+enabled = {{ jailsEnableStatus.recidive | bool | lower }}
+
+#
+# Добавленные
+#
+
+[php-fpm]
+# Для защиты от брутфорса PHP-приложений. Для этого настройте PHP-FPM на логирование ошибок авторизации в отдельный файл.
+enabled = {{ jailsEnableStatus['php-fpm'] | bool | lower }}
+port = http,https
+filter = php-fpm
+logpath = /var/log/php{{ php-version }}-fpm.log
+backend = polling ; т.к. по умолчанию исп-я systemd, а здесь исп-я файл
+
+[redis-auth]
+# Убедитесь, что Redis пишет логи в systemd.
+enabled = {{ jailsEnableStatus['redis-auth'] | bool | lower }}
+port = 6379
+filter = redis-auth

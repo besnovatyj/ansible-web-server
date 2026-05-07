@@ -1,0 +1,11 @@
+---
+# Test SSH connection with new keys под новым пользователем
+- name: Test SSH connection as new user
+  wait_for_connection:
+    delay: 5
+    timeout: 30
+  vars:
+    ansible_user: "{{ new_user }}"
+  delegate_to: localhost  # Тест с localhost под новым пользователем
+  run_once: true  # Только один раз
+  changed_when: false # Нужно ли?

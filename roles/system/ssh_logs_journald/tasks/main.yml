@@ -1,0 +1,18 @@
+---
+# Systemd override для sshd — перенаправление логов в journald
+- name: Create SSH systemd override directory
+  file:
+    path: /etc/systemd/system/ssh.service.d
+    state: directory
+    mode: '0755'
+
+- name: Configure SSH to log to journald
+  copy:
+    dest: /etc/systemd/system/ssh.service.d/override.conf
+    content: |
+      [Service]
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=sshd
+    mode: '0644'
+  notify: Reload systemd and restart SSH

@@ -1,0 +1,34 @@
+##########################################################
+#
+# Установка и настройка компонентов веб-сервера
+# 1) Redis
+# 1) Memcached
+# 2) MySQL
+# 3) Nginx
+# 4) PHP
+# 5) Очистка от мусора после установки всего необходимого
+#
+##########################################################
+---
+- name: Global installation and configuration of the web-server
+  hosts: site
+  gather_facts: yes
+  remote_user: root
+  vars_files:
+    - ../secrets/secrets.vault
+    - ../group_vars/global.yml
+  roles:
+    - ../roles/web-server/redis
+    - ../roles/web-server/memcached
+    - ../roles/web-server/mysql
+    - ../roles/web-server/nginx
+    - ../roles/web-server/php
+
+- name: Clean server
+  hosts: site
+  remote_user: root
+  vars_files:
+    - ../secrets/secrets.vault
+    - ../group_vars/global.yml
+  roles:
+    - ../roles/system/apt_clean

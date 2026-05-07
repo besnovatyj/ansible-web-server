@@ -1,0 +1,40 @@
+---
+- name: Sync site files # https://stackoverflow.com/a/27995384
+  ansible.posix.synchronize:
+    src: /mnt/a/openserver/domains/TODO/scripts/ansible/roles/data_transfer/data
+    dest: {{ web_root }}/{{ DOMAIN_NAME }}/
+    delete: yes # Удалит файлы на сервере, которых нет локально (опционально)
+    # checksum=true # По-умолчанию rsync использует для сравнения "mod-time" и "file size", если нужно сравнивать по содержимому, то включить эту опцию (checksum=true)
+
+- name: Change file ownership, group and permissions (7777)
+  ansible.builtin.file:
+    path: [
+      "{{ web_root }}/{{ DOMAIN_NAME }}/pub/storage/runtime",
+      "{{ web_root }}/{{ DOMAIN_NAME }}/pub/web/static/cache",
+      "{{ web_root }}/{{ DOMAIN_NAME }}/pub/web/static/files",
+      "{{ web_root }}/{{ DOMAIN_NAME }}/pub/web/static/origin",
+      "{{ web_root }}/{{ DOMAIN_NAME }}/pub/web/front/assets",
+      "{{ web_root }}/{{ DOMAIN_NAME }}/pub/web/back/assets",
+    ]
+    owner: "{{ ftp_user }}"
+    group: "{{ ftp_group }}"
+    mode: '7777'
+    recurse: yes
+
+- name: Copy db dump on server
+  copy:
+    src: ../../mysql_dump/dump.sql
+    dest: "{{ web_root }}/dump.sql"
+
+- name: MySQL dump
+  mysql_db:
+    name: domain_name_db
+    state: import
+    target: "{{ web_root }}/dump.sql"
+    login_user: root
+#    login_password: "{{ mysql_root_password }}"
+
+- name: Remove remote dump.sql
+  ansible.builtin.file:
+    path: "{{ web_root }}/dump.sql"
+    state: absent

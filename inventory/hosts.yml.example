@@ -1,0 +1,13 @@
+---
+all: # Корневая группа, включает все хосты. Не нуждается в обязательном объявлении.
+  children: # Подгруппы для `all`
+    site: # Название группы хостов
+      hosts: # Список хостов в группе или подгруппе
+        server: # Конкретный хост с параметрами подключения.
+          ansible_connection: ssh
+          ansible_host: 000.000.000.000
+          ansible_port: 22
+          ansible_ssh_private_key_file: "{{ site_ansible_key | default(omit) }}"
+          ansible_user: "{{ site_ansible_user }}"
+          ansible_password: "{{ vault_ansible_password | default(omit) }}"
+

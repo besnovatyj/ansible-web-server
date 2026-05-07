@@ -1,0 +1,38 @@
+---
+- name: Check if user exists
+  ansible.builtin.getent: # выполняет проверку существования пользователя
+    database: passwd
+    key: "{{ new_user }}"
+  # модуль getent обязательно требует регистрации результата через register, чтобы сохранить данные в getent_passwd.
+  register: user_check # Техническая необходимость, без этого не сохранится `getent_passwd`.
+  failed_when: false  # Не завершать playbook с ошибкой, если пользователь не существует
+
+- name: Create new user
+  user:
+    name: "{{ new_user }}"
+    password: '!' # юзер с недоступным рандомным паролем (будем юзать ssh-keys)
+    state: present
+    shell: /bin/bash
+    create_home: yes
+  when: getent_passwd[new_user] is not defined # Пользователь не существует
+
+- name: Add user to sudo group
+  user:
+    name: "{{ new_user }}"
+    groups: sudo
+    append: yes
+
+- name: Ensure .ssh directory exists for new user
+  file:
+    path: "/home/{{ new_user }}/.ssh"
+    state: directory
+    mode: '0700'
+    owner: "{{ new_user }}"
+    group: "{{ new_user }}"
+
+- name: Copy public key to new user
+  authorized_key:
+    user: "{{ new_user }}"
+    key: "{{ lookup('file', ordinary_pubkey_path) }}"
+    state: present
+    manage_dir: yes  # автоматически создаёт .ssh

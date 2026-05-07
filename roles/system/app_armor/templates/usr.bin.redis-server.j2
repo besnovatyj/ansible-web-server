@@ -1,0 +1,15 @@
+#include <tunables/global>
+
+/usr/bin/redis-server {
+  #include <abstractions/base>
+
+  capability net_bind_service,
+  capability dac_override,
+
+  /etc/redis/redis.conf r,
+  /var/lib/redis/** rwk,
+  /var/log/redis/** rw,
+  /run/redis/redis.sock rw,
+  /usr/bin/redis-server ix,
+  deny /etc/passwd r, # * **Риск:** `deny /etc/passwd r` для Nginx или PHP-FPM может сломать функции, требующие определения пользователя (например, `getpwuid`), которые часто используются в библиотеках или самом процессе запуска (смена юзера с root на www-data). * **Рекомендация:** Сначала запустите AppArmor в режиме `complain` (логирование нарушений без блокировки), посмотрите логи `dmesg`, и только потом включайте `enforce`. Жесткая блокировка чтения `/etc/passwd` часто приводит к "мистическим" падениям сервисов.
+}

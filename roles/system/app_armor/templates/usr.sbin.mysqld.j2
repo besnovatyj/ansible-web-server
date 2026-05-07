@@ -1,0 +1,16 @@
+#include <tunables/global>
+
+/usr/sbin/mysqld {
+  #include <abstractions/base>
+  #include <abstractions/mysql>
+
+  capability sys_resource,
+  capability dac_override,
+
+  /etc/mysql/** r,
+  /var/lib/mysql/** rwk,
+  /var/log/mysql/** rw,
+  /run/mysqld/mysqld.sock rw,
+  /usr/sbin/mysqld ix,
+  deny /home/** r,  # Ограничение доступа
+}

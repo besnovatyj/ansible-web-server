@@ -1,0 +1,5 @@
+/inventory/hosts.yml
+/logs/*
+/mysql_dump
+/secrets/!vault_pass.txt
+/secrets/secrets.yml

@@ -1,0 +1,18 @@
+#include <tunables/global>
+
+/usr/sbin/nginx {
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+
+  capability net_bind_service,
+  capability dac_override,
+  capability setgid,
+  capability setuid,
+
+  /etc/nginx/** r,
+  /var/www/** r,
+  /var/log/nginx/** rw,
+  /run/nginx.pid rw,
+  /usr/sbin/nginx ix,
+  deny /etc/passwd r,  # Пример ограничения # * **Риск:** `deny /etc/passwd r` для Nginx или PHP-FPM может сломать функции, требующие определения пользователя (например, `getpwuid`), которые часто используются в библиотеках или самом процессе запуска (смена юзера с root на www-data). * **Рекомендация:** Сначала запустите AppArmor в режиме `complain` (логирование нарушений без блокировки), посмотрите логи `dmesg`, и только потом включайте `enforce`. Жесткая блокировка чтения `/etc/passwd` часто приводит к "мистическим" падениям сервисов.
+}

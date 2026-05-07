@@ -1,0 +1,37 @@
+worker_processes 1;
+user www-data;
+pid /run/nginx.pid;
+include /etc/nginx/modules-enabled/*.conf;
+
+events {
+    worker_connections 512;
+}
+
+http {
+    # Настройка error_log для отправки в syslog (journald) (используется в file2ban)
+    error_log syslog:server=unix:/dev/log warn;
+    # Настройка access_log для отправки в syslog (journald)  (используется в file2ban)
+    access_log syslog:server=unix:/dev/log;
+
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    sendfile on;
+    keepalive_timeout 65;
+    server_tokens off;  # Скрыть версию Nginx для безопасности
+    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

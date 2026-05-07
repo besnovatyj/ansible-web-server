@@ -1,0 +1,27 @@
+---
+# Устанавливает Certbot, создаёт сертификаты и настраивает cron для renewal
+# TODO: Тестируйте: `curl -I http://bes-dev.ru` должен redirect на HTTPS.
+- name: Установка Certbot через Snap
+  snap:
+    name: certbot
+    classic: yes
+
+- name: Симлинк Certbot
+  file:
+    src: /snap/bin/certbot
+    dest: /usr/bin/certbot
+    state: link
+
+- name: Установка плагина Certbot для Nginx
+  command: snap install certbot-nginx  # Или apt: python3-certbot-nginx, но snap предпочтительнее
+
+# TODO: Добавьте условие: если сертификат существует (`/etc/letsencrypt/live/{{ domain }}/fullchain.pem`), то skip (используйте stat-модуль)
+- name: Получение SSL-сертификата (интерактивно, адаптируй)
+  command: certbot --nginx -d {{ DOMAIN_NAME }} --non-interactive --agree-tos --email {{ certbot_email }}
+
+- name: Настройка автообновления сертификатов
+  cron:
+    name: Certbot renewal
+    minute: "0"
+    hour: "3"
+    job: "/usr/bin/certbot renew --quiet"

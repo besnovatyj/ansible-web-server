@@ -1,0 +1,4 @@
+#ansible-galaxy collection install community.mysql
+- import_tasks: install.yml
+- import_tasks: mysql_secure_installation.yml
+- import_tasks: setup.yml

@@ -1,0 +1,6 @@
+# Для защиты от брутфорса PHP-приложений. Для этого настройте PHP-FPM на логирование ошибок авторизации в отдельный файл.
+[Definition]
+failregex = ^.*\[client <HOST>\].*PHP message: Failed login attempt.*
+# failregex = ^%(__prefix_line)s.*\[pool www\] .* authentication failure for user .*$
+ignoreregex =
+

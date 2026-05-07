@@ -1,0 +1,27 @@
+##########################################################
+#
+# Базовая настройка удалённого сервера
+# 1) Установка локалей, названия хоста и часового пояса
+# 2) Настройка swap
+# 3) Настройка systemd
+# 4) Настройка фаервола ufw
+# 5) Установка и настройка fail2ban
+# 6) TODO Настройка App Armor
+#
+##########################################################
+---
+- name: Basic server configuration
+  hosts: site
+  remote_user: root
+  become: true
+  vars_files:
+    - ../secrets/secrets.vault
+    - ../group_vars/global.yml
+  roles:
+    - ../roles/system/apt_update
+    - ../roles/system/locales_hostname_timezone
+    - ../roles/system/swap
+    - ../roles/system/systemd
+    - ../roles/system/ufw
+    - ../roles/system/fail2ban
+#    - ../roles/system/app_armor
