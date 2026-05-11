@@ -1,6 +1,6 @@
 ---
 # Устанавливает Certbot, создаёт сертификаты и настраивает cron для renewal
-# TODO: Тестируйте: `curl -I http://bes-dev.ru` должен redirect на HTTPS.
+# TODO: Тестируйте: `curl -I http://est-domain.com` должен redirect на HTTPS.
 - name: Установка Certbot через Snap
   snap:
     name: certbot
