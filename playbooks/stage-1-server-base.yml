@@ -1,0 +1,30 @@
+##########################################################
+# Stage 1: базовая настройка ОС
+# 1) Обновление security-патчей
+# 2) Локали, hostname, timezone
+# 3) Swap
+# 4) Лимиты journald
+#
+# UFW и fail2ban — в Stage 3, чтобы не мешать первой проверке ключей.
+##########################################################
+---
+- name: Pre-flight checks for stage 1
+  hosts: site
+  gather_facts: false
+  tasks:
+    - name: Assert essential variables are defined
+      assert:
+        that:
+          - domain_name is defined and domain_name | length > 0
+          - host_ip is defined and host_ip | length > 0
+        fail_msg: "domain_name or host_ip is missing. Check group_vars/all/main.yml."
+
+- name: Stage 1 - OS base configuration
+  hosts: site
+  remote_user: root # `become: true` намеренно убран — `remote_user: root` уже даёт нужные права. `become` относится к sudo-эскалации, под root она не нужна.
+  gather_facts: true
+  roles:
+    - ../roles/system/apt_update
+    - ../roles/system/locales_hostname_timezone
+    - ../roles/system/swap
+    - ../roles/system/systemd
