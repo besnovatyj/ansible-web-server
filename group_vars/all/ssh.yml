@@ -13,7 +13,7 @@ ssh_key_passphrase: "{{ vault_ssh_key_passphrase }}" # Технически в A
 target_ssh_port: 22 # TODO - лучше потом поменять порт по умолчанию для SSH
 
 ############### Пути к ключам
-local_ssh_keys_dir: "{{ local_home_path }}/.ssh"
+local_ssh_keys_dir: "{{ playbook_dir }}/../secrets/ssh" # Была домашняя директория -  "{{ local_home_path }}/.ssh"
 # ssh_keys_dir: "{{ ansible_env.HOME }}/.ssh" # ansible_env — это facts целевого хоста, а не контроллера
 ordinary_key_path: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}"
 ordinary_pubkey_path: "{{ ordinary_key_path }}.pub"
