@@ -1,0 +1,45 @@
+##########################################################
+# Stage 2: настройка пользовательского доступа
+# 1) Создание sudo-пользователя
+# 2) Деплой emergency-ключа на root
+# 3) Деплой обычного ключа на sudo-пользователя
+# 4) Перенаправление SSH-логов в journald
+# 5) Verify SSH-входа для root и для new_user
+#
+# ВНИМАНИЕ: пароль НЕ отключается, hardening — в Stage 3.
+##########################################################
+---
+- name: Pre-flight checks for stage 2
+  hosts: site
+  gather_facts: false
+  tasks:
+    - name: Assert new_user is set
+      assert:
+        that:
+          - new_user is defined and new_user | length > 0
+        fail_msg: "new_user is not set. Check group_vars/all/ssh.yml."
+
+- name: Stage 2 - User access setup
+  hosts: site
+  remote_user: root
+  gather_facts: true
+  roles:
+    - ../roles/system/user_sudo_add_new
+    - ../roles/system/ssh_remote_root_keys      # emergency на root
+    - ../roles/system/ssh_remote_user_keys      # ordinary на new_user (F2)
+    - ../roles/system/ssh_logs_journald
+
+  post_tasks:
+    - name: Verify root SSH login via emergency key
+      include_role:
+        name: ../roles/system/verify_ssh
+      vars:
+        verify_ssh_user: root
+        verify_ssh_key: "{{ emergency_key_path }}"
+
+    - name: Verify new_user SSH login via ordinary key
+      include_role:
+        name: ../roles/system/verify_ssh
+      vars:
+        verify_ssh_user: "{{ new_user }}"
+        verify_ssh_key: "{{ ordinary_key_path }}"
