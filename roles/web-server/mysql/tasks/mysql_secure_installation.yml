@@ -92,21 +92,26 @@
       when: anon_users_check.changed
       no_log: true
 
-    - name: Удаление дополнительных root-аккаунтов для запрета удалённого доступа
+    - name: Получить список всех root@host из mysql.user
+      community.mysql.mysql_query:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        query: "SELECT Host FROM mysql.user WHERE User = 'root'"
+      register: mysql_root_hosts
+      no_log: true
+
+    - name: Удалить все root-аккаунты, не входящие в keep_mysql_root_hosts
       mysql_user:
         name: root
-        host: "{{ item }}"
+        host: "{{ item.Host }}"
         state: absent
         login_user: root
         login_password: "{{ mysql_root_password }}"
         login_unix_socket: /var/run/mysqld/mysqld.sock
-      loop:
-        - "::1"
-        - "127.0.0.1"
-        - "{{ ansible_fqdn | default('') }}"  # Если fqdn не определён, пропустить
-        - "{{ inventory_hostname }}"
-        - "{{ ansible_hostname }}"
-        - "%"  # Любые удалённые хосты
+      loop: "{{ mysql_root_hosts.query_result[0] }}"
+      loop_control:
+        label: "root@{{ item.Host }}"
+      when: item.Host not in keep_mysql_root_hosts
       no_log: true
-      when: item != 'localhost'  # Не удалять localhost
   when: mysql_root_password is defined  # Выполнять только если пароль сгенерирован
