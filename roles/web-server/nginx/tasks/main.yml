@@ -17,6 +17,17 @@
     backup: yes
   notify: Restart nginx
 
+- name: Create web roots for all configured nginx sites
+  ansible.builtin.file:
+    path: "{{ item.web_root }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+  loop: "{{ nginx_sites }}"
+  loop_control:
+    label: "{{ item.name }}"
+
 - name: Copy host settings
   ansible.builtin.template:
     src: site.tmp.j2
@@ -63,20 +74,6 @@
   check_mode: no
   changed_when: false
   notify: Restart nginx
-
-# Убедитесь, что директории, указанные в site.tmp.j2 (например, /var/www/{{ domain_name }}/app/frontend/pub/), существуют и имеют правильные права:
-# Если директории отсутствуют, добавьте задачу для их создания:
-#- name: Create web root directories
-#  ansible.builtin.file:
-#    path: "{{ web_root }}/{{ domain_name }}/app/{{ item }}"
-#    state: directory
-#    owner: www-data
-#    group: www-data
-#    mode: 0755
-#  loop:
-#    - frontend/pub
-#    - backend/pub
-#    - static
 
 # Добавьте отладочную задачу для вывода статуса Nginx в случае сбоя nginx -t:
 #- name: Debug Nginx configuration test failure
