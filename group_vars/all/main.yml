@@ -3,7 +3,7 @@
 ##########################################################
 
 domain_name: domain.zone
-HOST_IP: "{{ hostvars[groups['site'][0]]['ansible_host'] }}"
+host_ip: "{{ hostvars[groups['site'][0]]['ansible_host'] }}" # А это где-то нужно?
 web_root: "/var/www"
 locale1: ru_RU.UTF-8
 locale2: en_US.UTF-8
