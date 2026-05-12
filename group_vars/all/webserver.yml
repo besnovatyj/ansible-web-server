@@ -1,0 +1,60 @@
+---
+##########################################################
+# PHP
+##########################################################
+
+php-version: 8.4 # Стабильная версия из "https://packages.ubuntu.com/" для "Ubuntu 24.04.3 (Noble Numbat)"
+
+# --------------------------------------------------------
+# PHP
+# Проверка доступности пакетов. На сервере выполните:
+# ```php
+# apt update
+# apt search php8.4
+# ```
+# --------------------------------------------------------
+
+php_modules: [
+  "php{{ php-version }}-fpm",
+  "php{{ php-version }}-cli",
+  "php{{ php-version }}-common", # Содержит calendar
+  "php{{ php-version }}-mysqlnd",
+  "php{{ php-version }}-mysql", # Содержит pdo_mysql
+  "php{{ php-version }}-redis",
+  "php{{ php-version }}-zip",
+  "php{{ php-version }}-gd",
+  "php{{ php-version }}-mbstring",
+  "php{{ php-version }}-curl",
+  "php{{ php-version }}-xml", # Содержит simplexml, dom
+  "php{{ php-version }}-apcu", # Заметки: Версия 5.1.24; для кэширования; включить apcu.enable=1 в conf.d/apcu.ini
+  "php{{ php-version }}-intl", # TODO проверить что работает (должны работать форматтеры Yii2)
+  "php{{ php-version }}-bcmath",
+  "php{{ php-version }}-fileinfo",
+  "php{{ php-version }}-pdo",
+  "php{{ php-version }}-opcache", # Включить opcache.enable=1 в conf.d/opcache.ini. Конфигурируйте для производительности.
+  "php{{ php-version }}-exif",
+  "php{{ php-version }}-imagick",
+  "php{{ php-version }}-memcached",
+  #  "php{{ php-version }}-pcntl" # Только CLI, в FPM не работает
+]
+
+##########################################################
+# MYSQL
+##########################################################
+
+mysql_db_name: mysql_db_name
+mysql_db_user: mysql_db_user
+mysql_db_user_password: "{{ vault_mysql_db_user_password }}"
+mysql_root_password: "{{ vault_mysql_root_password }}"
+
+# Список host-значений в mysql.user, которые root@<host> НЕ удаляются при secure_installation.
+# Всё остальное (включая '%' и FQDN сервера) удаляется.
+keep_mysql_root_hosts:
+  - localhost
+  - 127.0.0.1
+
+##########################################################
+# CERTBOT
+##########################################################
+
+certbot_email: 'name@domain.zone'

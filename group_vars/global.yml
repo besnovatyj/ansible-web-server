@@ -95,7 +95,7 @@ php_modules: [
   "php{{ php-version }}-cli",
   "php{{ php-version }}-common", # Содержит calendar
   "php{{ php-version }}-mysqlnd",
-  "php{{ php-version }}-mysql", #  Содержит pdo_mysql
+  "php{{ php-version }}-mysql", # Содержит pdo_mysql
   "php{{ php-version }}-redis",
   "php{{ php-version }}-zip",
   "php{{ php-version }}-gd",
@@ -121,7 +121,7 @@ php_modules: [
 mysql_db_name: mysql_db_name
 mysql_db_user: mysql_db_user
 mysql_db_user_password: "{{ vault_mysql_db_user_password }}"
-mysql_root_password : "{{ vault_mysql_root_password }}"
+mysql_root_password: "{{ vault_mysql_root_password }}"
 
 # Список host-значений в mysql.user, которые root@<host> НЕ удаляются при secure_installation.
 # Всё остальное (включая '%' и FQDN сервера) удаляется.
