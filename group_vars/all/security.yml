@@ -1,0 +1,31 @@
+---
+##########################################################
+# FAIL2BAN
+##########################################################
+
+# fail2ban_version: 1.1.0 # v=1.0.2-3 Предустановлена в Ubuntu 24.04.3 (Noble Numbat). При попытке установить любую версию показывает ошибку что дистрибутив не найден в репозитории
+banTime: 3600 # default - 10m
+findTime: 600 # default - 10m
+maxRetry: 5
+# NB: Защищаем точки входа, а не всё подряд.
+# Если сервис имеет доступ снаружи сервера, тогда защищаем,
+# иначе просто закрываем доступ извне на уровне фаервола.
+jailsEnableStatus:
+  # Предустановленные
+  sshd: true
+  nginx-http-auth: true
+  nginx-limit-req: false # Чтобы включить, сначала прочитай описание в файле конфига
+  nginx-botsearch: true
+  nginx-bad-request: true
+  nginx-forbidden: true
+  php-url-fopen: true
+  vsftpd: false # Не устанавливаем. Зачем, если есть WinSCP
+  mysqld-auth: false # Слушает только localhost
+  traefik-auth: false # Сначала настрой его. :)
+  recidive: true
+  sendmail-auth: false
+  sendmail-reject: false
+  # Добавленные
+  php-fpm: false # Для защиты от брутфорса PHP-приложений. Логирование см. ANALYSIS 3.2.6
+  redis-auth: false # Слушает только localhost
+  yii2-auth: false # Включится после внедрения Monolog→SyslogHandler в Yii2. См. ANALYSIS 3.2.6
