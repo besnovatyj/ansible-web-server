@@ -17,9 +17,9 @@
     mode: '0644'
   notify: Reload AppArmor
 
-- name: Enforce Nginx profile
-  command: aa-enforce /etc/apparmor.d/usr.sbin.nginx
-  ignore_errors: true  # Если уже в enforce, игнорировать
+- name: Set Nginx profile to complain mode
+  command: aa-complain /etc/apparmor.d/usr.sbin.nginx
+  changed_when: false
   notify: Reload AppArmor
 
 # Профиль для PHP-FPM (основной процесс)
@@ -30,9 +30,9 @@
     mode: '0644'
   notify: Reload AppArmor
 
-- name: Enforce PHP-FPM profile
-  command: aa-enforce /etc/apparmor.d/usr.sbin.php-fpm{{ php-version }}
-  ignore_errors: true
+- name: Set php-fpm profile to complain mode
+  command: aa-complain /etc/apparmor.d/usr.sbin.php-fpm{{ php-version }}
+  changed_when: false
   notify: Reload AppArmor
 
 # Профиль для MySQL
@@ -43,9 +43,9 @@
     mode: '0644'
   notify: Reload AppArmor
 
-- name: Enforce MySQL profile
-  command: aa-enforce /etc/apparmor.d/usr.sbin.mysqld
-  ignore_errors: true
+- name: Set mysqld profile to complain mode
+  command: aa-complain /etc/apparmor.d/usr.sbin.mysqld
+  changed_when: false
   notify: Reload AppArmor
 
 # Профиль для Redis
@@ -56,9 +56,9 @@
     mode: '0644'
   notify: Reload AppArmor
 
-- name: Enforce Redis profile
-  command: aa-enforce /etc/apparmor.d/usr.bin.redis-server
-  ignore_errors: true
+- name: Set redis-server profile to complain mode
+  command: aa-complain /etc/apparmor.d/usr.bin.redis-server
+  changed_when: false
   notify: Reload AppArmor
 
 # Профиль для fail2ban
@@ -69,7 +69,7 @@
     mode: '0644'
   notify: Reload AppArmor
 
-- name: Enforce fail2ban profile
-  command: aa-enforce /etc/apparmor.d/usr.sbin.fail2ban-server
-  ignore_errors: true
+- name: Set fail2ban-server profile to complain mode
+  command: aa-complain /etc/apparmor.d/usr.sbin.fail2ban-server
+  changed_when: false
   notify: Reload AppArmor
