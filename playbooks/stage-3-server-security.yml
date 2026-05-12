@@ -1,0 +1,61 @@
+##########################################################
+# Stage 3: hardening
+# Запускать ТОЛЬКО после успешного Stage 2.
+##########################################################
+---
+- name: Pre-flight checks for stage 3
+  hosts: site
+  gather_facts: false
+  tasks:
+    - name: Assert essential variables
+      assert:
+        that:
+          - new_user is defined and new_user | length > 0
+        fail_msg: "new_user is not set"
+
+- name: Stage 3 - Security hardening
+  hosts: site
+  remote_user: root
+  gather_facts: true
+
+  pre_tasks:
+    - name: Pre-check root SSH login
+      include_role:
+        name: ../roles/system/verify_ssh
+      vars:
+        verify_ssh_user: root
+        verify_ssh_key: "{{ emergency_key_path }}"
+
+    - name: Pre-check new_user SSH login
+      include_role:
+        name: ../roles/system/verify_ssh
+      vars:
+        verify_ssh_user: "{{ new_user }}"
+        verify_ssh_key: "{{ ordinary_key_path }}"
+
+  roles:
+    - ../roles/system/ufw
+    - ../roles/system/ssh_remote_security
+
+  post_tasks:
+    - name: Post-check root SSH login after sshd hardening
+      include_role:
+        name: ../roles/system/verify_ssh
+      vars:
+        verify_ssh_user: root
+        verify_ssh_key: "{{ emergency_key_path }}"
+
+    - name: Post-check new_user SSH login after sshd hardening
+      include_role:
+        name: ../roles/system/verify_ssh
+      vars:
+        verify_ssh_user: "{{ new_user }}"
+        verify_ssh_key: "{{ ordinary_key_path }}"
+
+- name: Stage 3 - Enable fail2ban (after SSH verification)
+  hosts: site
+  remote_user: root
+  roles:
+    - ../roles/system/fail2ban
+    # AppArmor (после фазы B4 — в complain mode) можно включать тут же или отдельно:
+    # - ../roles/system/app_armor
