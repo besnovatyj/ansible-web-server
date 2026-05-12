@@ -10,6 +10,6 @@
 - name: Copy public key to root (for emergency access)
   authorized_key:
     user: root
-    key: "{{ lookup('file', ordinary_pubkey_path) }}"
+    key: "{{ lookup('file', emergency_pubkey_path) }}"
     state: present
     manage_dir: yes
