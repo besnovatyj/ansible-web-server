@@ -1,12 +1,13 @@
 ---
-
-# Test SSH connection with new keys под root
-- name: Test SSH connection as root
-  wait_for_connection:
-    delay: 5
-    timeout: 30
-  vars:
-    ansible_user: "root"
-  delegate_to: localhost  # Тест с localhost под root
-  run_once: true  # Только один раз
-  changed_when: false # Нужно ли?
+- name: Verify SSH key login for root (emergency key)
+  delegate_to: localhost
+  command: >
+    ssh -i {{ emergency_key_path }}
+        -o BatchMode=yes
+        -o StrictHostKeyChecking=yes
+        -o ConnectTimeout=10
+        -p {{ target_ssh_port }}
+        root@{{ target_host }} "echo OK"
+  register: ssh_test_root
+  changed_when: false
+  failed_when: "'OK' not in ssh_test_root.stdout"

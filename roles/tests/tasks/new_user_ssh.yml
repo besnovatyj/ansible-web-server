@@ -1,11 +1,13 @@
 ---
-# Test SSH connection with new keys под новым пользователем
-- name: Test SSH connection as new user
-  wait_for_connection:
-    delay: 5
-    timeout: 30
-  vars:
-    ansible_user: "{{ new_user }}"
-  delegate_to: localhost  # Тест с localhost под новым пользователем
-  run_once: true  # Только один раз
-  changed_when: false # Нужно ли?
+- name: Verify SSH key login for new user
+  delegate_to: localhost
+  command: >
+    ssh -i {{ ordinary_key_path }}
+        -o BatchMode=yes
+        -o StrictHostKeyChecking=yes
+        -o ConnectTimeout=10
+        -p {{ target_ssh_port }}
+        {{ new_user }}@{{ target_host }} "echo OK"
+  register: ssh_test_new_user
+  changed_when: false
+  failed_when: "'OK' not in ssh_test_new_user.stdout"
