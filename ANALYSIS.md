@@ -229,7 +229,7 @@ paramiko или openssh) **не умеет** интерактивно вводи
 Нигде в `remote-security.yml` нет `assert`-задачи, которая бы проверила SSH-подключение по ключу перед отключением
 пароля.
 
-> ⚠️ ЗАМЕЧАНИЕ: Не работал Ansible через ssh парольной фразой, поэтому данный шаг был исключен из работы плейбука.
+> ⚠️ ЗАМЕЧАНИЕ: Не работал Ansible через ssh с passphrase, поэтому данный шаг был исключен из работы плейбука.
 
 > 📝 ОТВЕТ AI: Понятно. После того как уйдём от passphrase в основном цикле (см. ответ в 3.1.1), `remote-security`
 > вернётся в строй. И всё равно стоит **добавить assert-проверку SSH по ключу до отключения пароля** — это страховка
@@ -339,34 +339,33 @@ sticky bit. Любой процесс на сервере может модиф�
 `certbot --nginx`, это на данный момент делается вручную. Если есть возможность автоматизировать, было бы очень хорошо.
 > Только нужно помнить про вынос в переменные путей к web-доступным директориям из конфига Nginx. Это нужно для того,
 > чтобы убрать хардкод путей из конфигов Nginx и чтобы для запуска Nginx до копирования самого проекта директории были
-> созданы
-> заранее. Иначе при отсутствии директорий в файловой системе, но при их указании в конфиге Nginx, он не запустится и
-> нельзя будет запустить Certbot без рабочего Nginx, до копирования исходников самого проекта. А чтобы без хардкода
-> создать пути и прописать их же в конфиг Nginx, их нужно вынести в переменные.
+> созданы заранее. Иначе при отсутствии директорий в файловой системе, но при их указании в конфиге Nginx, он не
+> запустится и нельзя будет запустить Certbot без рабочего Nginx, до копирования исходников самого проекта. А чтобы без
+> хардкода создать пути и прописать их же в конфиг Nginx, их нужно вынести в переменные.
 
 > 📝 ОТВЕТ AI: Согласен полностью. Конкретный план (детали — в Stage 4 / Stage 5):
 >
 > 1. В `group_vars/all/webserver.yml` вводим структуру `nginx_sites`, описывающую все vhost-ы декларативно. Пример:
      >
-     >    ```yaml
->    nginx_sites:
->      - name: frontend
->        server_name: "{{ domain_name }} www.{{ domain_name }}"
->        web_root: "{{ web_root }}/{{ domain_name }}/app/frontend/pub"
->        client_max_body_size: 10M
->        php_fpm: true
->      - name: backend
->        server_name: "adm.{{ domain_name }} www.adm.{{ domain_name }}"
->        web_root: "{{ web_root }}/{{ domain_name }}/app/backend/pub"
->        client_max_body_size: 750M
->        php_fpm: true
->      - name: static
->        server_name: "files.{{ domain_name }} www.files.{{ domain_name }}"
->        web_root: "{{ web_root }}/{{ domain_name }}/app/static"
->        client_max_body_size: 1024M
->        php_fpm: false
->    ```
->
+     > ```yaml
+     > nginx_sites:
+     > - name: frontend
+     >   server_name: "{{ domain_name }} www.{{ domain_name }}"
+     >   web_root: "{{ web_root }}/{{ domain_name }}/app/frontend/pub"
+     >   client_max_body_size: 10M
+     >   php_fpm: true
+     > - name: backend
+     >   server_name: "adm.{{ domain_name }} www.adm.{{ domain_name }}"
+     >   web_root: "{{ web_root }}/{{ domain_name }}/app/backend/pub"
+     >   client_max_body_size: 750M
+     >   php_fpm: true
+     > - name: static
+     >   server_name: "files.{{ domain_name }} www.files.{{ domain_name }}"
+     >   web_root: "{{ web_root }}/{{ domain_name }}/app/static"
+     >   client_max_body_size: 1024M
+     >   php_fpm: false
+     > ```
+     >
 > 2. В роли `nginx` перед рендером конфига создаём все указанные `web_root` (`file: state=directory`,
      > `owner=www-data, group=www-data, mode=0755`). Это снимает требование "сначала задеплоить проект, потом
      > запустить Nginx". Nginx стартует с пустыми директориями и отдаёт 404 — но процесс жив и доступен на 80 порту,
@@ -389,12 +388,12 @@ sticky bit. Любой процесс на сервере может модиф�
 
 > 📝 ОТВЕТ AI: Принято. Конкретно:
 > 1. Все профили переключаем в режим `complain` через `aa-complain /etc/apparmor.d/usr.sbin.nginx` (вместо
-     > `aa-enforce`).
+     `aa-enforce`).
 > 2. Из шаблонов выпиливаем явные `deny /etc/passwd r` (и аналогичные), они ломают чтение системных файлов, нужных
-     > самим демонам, например для resolve UID/GID www-data.
+     самим демонам, например для resolve UID/GID www-data.
 > 3. После недели работы под `complain` смотрим `journalctl -u apparmor` / `dmesg | grep DENIED` и на основе
-     > реальных нарушений уже принимаем решение о переключении в `enforce`. Эти шаги — задача за рамками автоматизации
-     > Ansible, скорее ручная итерация.
+     реальных нарушений уже принимаем решение о переключении в `enforce`. Эти шаги — задача за рамками автоматизации
+     Ansible, скорее ручная итерация.
 
 #### 3.2.5 PHP: отсутствуют критические настройки безопасности
 
@@ -410,7 +409,7 @@ sticky bit. Любой процесс на сервере может модиф�
 
 > 📝 ОТВЕТ AI: Тогда в `roles/web-server/php/files/conf.d/` создаём:
 > - `security.ini` — `disable_functions = system,exec,shell_exec,passthru,proc_open,popen,proc_close,curl_multi_exec,
->   parse_ini_file,show_source,phpinfo`; `expose_php = Off`; `allow_url_fopen = Off`; `allow_url_include = Off`.
+     parse_ini_file,show_source,phpinfo`; `expose_php = Off`; `allow_url_fopen = Off`; `allow_url_include = Off`.
 > - `opcache.ini` — `opcache.enable=1`, `opcache.enable_cli=1`, `opcache.memory_consumption=128`,
     > `opcache.max_accelerated_files=10000`, `opcache.validate_timestamps=0` (для prod).
 > - `apcu.ini` — `apcu.enable=1`, `apcu.shm_size=64M`.
@@ -427,35 +426,34 @@ sticky bit. Любой процесс на сервере может модиф�
 
 > ⚠️ ЗАМЕЧАНИЕ: Неверно! Ошибки авторизации логирует не глобальный PHP-FPM, а само приложение (админка) на PHP, которое
 > не умеет писать в syslog. Поэтому и настраивать логирование в файл нужно в самом приложении, а не в
-`roles/web-server/php/tasks/main.yml:61`. Или я ошибаюсь и можно настроить логирование ошибок авторизации (их пишет PHP
+> `roles/web-server/php/tasks/main.yml:61`. Или я ошибаюсь и можно настроить логирование ошибок авторизации (их пишет
+> PHP
 > Monolog) в админке через syslog?
 
 > ❌ ИСПРАВЛЕНИЕ AI: Ты прав, я смешал два разных потока логов. Глобальный `error_log = syslog` в `php.ini` отвечает
 > только за ошибки самого интерпретатора PHP (warnings, fatals); ошибки авторизации админки идут через Monolog
 > приложения и в syslog не попадают.
->
+
 > 📝 ОТВЕТ AI (по поводу Monolog):
 > 1. **Можно ли через Monolog писать в syslog?** Да, у Monolog есть готовый `Monolog\Handler\SyslogHandler` (через
-     > функцию PHP `openlog/syslog`) и `Monolog\Handler\SyslogUdpHandler` (через `udp://`). На системе с journald
-     > `SyslogHandler` положит сообщения прямо в `systemd-journald` под тегом, который укажешь.
+     функцию PHP `openlog/syslog`) и `Monolog\Handler\SyslogUdpHandler` (через `udp://`). На системе с journald
+     `SyslogHandler` положит сообщения прямо в `systemd-journald` под тегом, который укажешь.
 > 2. **Стоит ли так делать?** Стоит, по двум причинам:
-     >
-- fail2ban с `backend = systemd` и `journalmatch = SYSLOG_IDENTIFIER=yii2-auth` будет видеть события без всяких
-  > файлов и polling — это рабочая, проверенная схема (в проекте ровно так уже сделано для nginx).
->    - Не надо думать про ротацию файла лога и его права (`www-data` vs `root`).
+     - fail2ban с `backend = systemd` и `journalmatch = SYSLOG_IDENTIFIER=yii2-auth` будет видеть события без всяких
+     файлов и polling — это рабочая, проверенная схема (в проекте ровно так уже сделано для nginx).
+     - Не надо думать про ротацию файла лога и его права (`www-data` vs `root`).
 > 3. **Как настроить в Yii2 (вне зоны Ansible-проекта, для контекста):** в `common/config/main.php` добавляешь канал
-     > `auth` с `SyslogHandler` (`ident: yii2-auth`, `facility: LOG_AUTH`, `level: NOTICE`). В контроллере
-     > `SiteController::actionLogin` или в `User::onAfterLogin` отправляешь сообщение
+     `auth` с `SyslogHandler` (`ident: yii2-auth`, `facility: LOG_AUTH`, `level: NOTICE`). В контроллере
+     `SiteController::actionLogin` или в `User::onAfterLogin` отправляешь сообщение
      `"Failed login from {ip} for {username}"`
-     > или `"Successful login from {ip} for {username}"`. Дальше — фильтр fail2ban с regex по этой строке.
+     или `"Successful login from {ip} for {username}"`. Дальше — фильтр fail2ban с regex по этой строке.
 > 4. **План правок в Ansible-проекте:** в `jail.local.j2` меняем jail `[php-fpm]` на `[yii2-auth]`:
-     >
-- `backend = systemd`
->    - `journalmatch = _SYSTEMD_UNIT=php{{ php_version }}-fpm.service SYSLOG_IDENTIFIER=yii2-auth`
->    - `filter = yii2-auth` (свой filter под формат Monolog).
->    - Сам файл `/var/log/php8.4-fpm.log` больше не нужен — убираем `logpath` и `backend = polling`.
+     - `backend = systemd`
+     - `journalmatch = _SYSTEMD_UNIT=php{{ php_version }}-fpm.service SYSLOG_IDENTIFIER=yii2-auth`
+     - `filter = yii2-auth` (свой filter под формат Monolog).
+     - Сам файл `/var/log/php8.4-fpm.log` больше не нужен — убираем `logpath` и `backend = polling`.
 > 5. Если вариант с Monolog не подходит — оставляем `[php-fpm]` jail выключенным (`jails_enable_status.php_fpm: false`,
-     > как сейчас) и просто документируем что это TODO.
+     как сейчас) и просто документируем что это TODO.
 
 #### 3.2.7 MySQL: ~~сломана~~ перепроверена логика удаления remote root
 
@@ -466,21 +464,23 @@ sticky bit. Любой процесс на сервере может модиф�
 
 > ❌ ИСПРАВЛЕНИЕ AI: Я ошибся в исходном анализе. Перепроверил файл — `item` действительно строка
 > (`"::1"`, `"127.0.0.1"`, `"{{ ansible_fqdn | default('') }}"`, `"{{ inventory_hostname }}"`,
-`"{{ ansible_hostname }}"`,
-> `"%"`), условие `when: item != 'localhost'` работает корректно. Откуда у меня взялся "словарь `{ host: "..." }`" —
-> не могу восстановить, скорее всего перепутал с похожим примером из community.mysql документации. Извиняюсь за
-> ложную тревогу.
+> `"{{ ansible_hostname }}"`, `"%"`), условие `when: item != 'localhost'` работает корректно.
+> Откуда у меня взялся "словарь `{ host: "..." }`" — не могу восстановить, скорее всего перепутал с похожим примером
+> из community.mysql документации. Извиняюсь за ложную тревогу.
 >
 > **Что осталось корректным замечанием:** в текущем loop'е значение `'localhost'` нигде и так не появляется (в loop
 > только `::1`, `127.0.0.1`, fqdn, hostnames и `%`). Поэтому условие `when: item != 'localhost'` фактически всегда
 > истинно, кроме экзотического случая, когда `ansible_fqdn` или `ansible_hostname` равны `'localhost'` (бывает на
 > неконфигурированных контейнерах). То есть условие — защитный no-op для типового случая. Это не баг, но и не
 > приносит пользы при текущем `inventory`. Можно оставить как есть для подстраховки.
->
+
 > ⚠️ ЗАМЕЧАНИЕ: Это вот ты откуда придумал, что `item` — это словарь? `item` — это строки из loop. А это
-`when: item != 'localhost'` нужно для того чтобы не удалить последнего root пользователя, которого я буду использовать
+> `when: item != 'localhost'` нужно для того чтобы не удалить последнего root пользователя, которого я буду использовать
 > для подключения к БД через туннель ssh. Это - `{ host: "..." }`, скорее всего, твой глюк, нигде не вижу такого, уточни
 > и перепроверь.
+> ⚠️⚠️ ЗАМЕЧАНИЕ 2: localhost на самом деле может отсутствовать, скорее всего, если я поменяю название хоста,
+> даже без Docker. Я же могу глобально на машине установить hostname? Или откуда этот localhost вообще берется? Из
+> MySQL? Разобраться!!!
 
 ---
 
@@ -558,7 +558,7 @@ sticky bit. Любой процесс на сервере может модиф�
 >
 > - **Stage 0** — отдельно потому что выполняется на localhost (другой `hosts:`).
 > - **Stage 1 (OS) + Stage 2 (access)** — разделены ради того, чтобы между ними можно было сходить ssh-ом руками и
-    > убедиться что ключи работают, перед тем как Stage 3 отключит пароль.
+    убедиться что ключи работают, перед тем как Stage 3 отключит пароль.
 > - **Stage 3 (security)** — отделён от Stage 4 (LEMP), чтобы при пере-настройке LEMP не трогать sshd/UFW.
 > - **Stage 4 (LEMP)** — единым блоком, как ты и хотел.
 > - **Stage 5 (Certbot/Queue)** — отдельно, потому что зависит от DNS и от наличия исходников приложения.
@@ -657,9 +657,9 @@ Ansible использует для SSH-подключений либо библ
 >
 > 1. Stages 0–6 работают **только** с ключами без passphrase. Это снимает все проблемы интеграции с WSL2/Makefile.
 > 2. Stage 7 (key-hardening) — отдельный плейбук, **финальный и одноразовый**. После него Ansible с этим сервером
-     > больше не работает (модель "настроил → сложил ключи в KeePass → забыл").
+     больше не работает (модель "настроил → сложил ключи в KeePass → забыл").
 > 3. Я ниже (4.3, 4.4) **больше не предлагаю** трогать `ssh-agent` — этот блок оставлен в документе как
-     > историческая справка, чтобы при возврате к теме через год не забыть, что подходы пробовались и не сработали.
+     историческая справка, чтобы при возврате к теме через год не забыть, что подходы пробовались и не сработали.
 
 ### 4.2 Рекомендуемая стратегия (из `TODO/000-PLAN.MD`)
 
@@ -759,17 +759,17 @@ local_ssh_keys_dir: "{{ playbook_dir }}/../secrets/ssh"
 
 > 📝 ОТВЕТ AI: Принято. Конкретные правки для перехода на хранение ключей в проекте:
 > 1. В `group_vars/all/ssh.yml` меняем:
-     >    ```yaml
->    local_ssh_keys_dir: "{{ playbook_dir }}/../secrets/ssh"
->    ```
-     >    (вместо `"{{ local_home_path }}/.ssh"`).
+     ```yaml
+        local_ssh_keys_dir: "{{ playbook_dir }}/../secrets/ssh"
+     ```
+     (вместо `"{{ local_home_path }}/.ssh"`).
 > 2. В `ansible/secrets/.gitignore` добавляем `ssh/` (либо в корневой `.gitignore`).
 > 3. В `inventory/hosts.yml.example` меняем `ansible_ssh_private_key_file` на относительный путь:
-     > `"{{ playbook_dir }}/../secrets/ssh/key_{{ domain_name }}"`.
+     `"{{ playbook_dir }}/../secrets/ssh/key_{{ domain_name }}"`.
 > 4. Роль `ssh_generate_local_keys` уже использует переменные `ordinary_key_path` / `emergency_key_path`, поэтому
-     > при смене `local_ssh_keys_dir` место генерации сменится автоматически.
+     при смене `local_ssh_keys_dir` место генерации сменится автоматически.
 > 5. Документировать в `ansible/secrets/README.md` процедуру архивирования ключей в KeePass после завершения
-     > настройки сервера, чтобы через год не забыть.
+     настройки сервера, чтобы через год не забыть.
 
 ---
 
@@ -1067,9 +1067,8 @@ HeidiSQL/WinSCP). При запуске роль будет иметь заха�
 ---
 
 **Доступ на сервер для админа (не плейбук, а заметка):** HeidiSQL/Kitty/WinSCP подключаются по ключу
-`key_{{ domain_name }}`
-для пользователя `{{ new_user }}` через порт `{{ target_ssh_port }}`. WinSCP-протокол SCP/SFTP, MySQL через
-"SSH tunnel" в HeidiSQL на `127.0.0.1:3306`.
+`key_{{ domain_name }}` для пользователя `{{ new_user }}` через порт `{{ target_ssh_port }}`. WinSCP-протокол SCP/SFTP,
+MySQL через "SSH tunnel" в HeidiSQL на `127.0.0.1:3306`.
 
 ---
 
@@ -1115,6 +1114,10 @@ HeidiSQL/WinSCP). При запуске роль будет иметь заха�
 >
 > Никакого `environments.sh`-shenanigans нет, и WSL2/Makefile проблема снимается с повестки.
 
+> ⚠️⚠️ ЗАМЕЧАНИЕ 2: Можно ли здесь тогда бэкапить ключи без passphrase с указанием данного факта в имени бэкапа? То
+> есть, не просто _backup, а, например `_without_passphrase`. Хотя, есть ли в этом смысл, если ключи без passphrase
+> удаляются при этом с удалённого сервера.
+
 ---
 
 ### 5.3 Разделение переменных (обновлено с учётом замечаний)
@@ -1130,19 +1133,18 @@ HeidiSQL/WinSCP). При запуске роль будет иметь заха�
 > 📝 ОТВЕТ AI: Учтены все замечания. Конкретные правки:
 >
 > 1. **Комментарии из `global.yml` переносим как есть** в новые файлы — каждая переменная сопровождается своим
-     > комментарием (`# TODO`, `# default - 10m`, и т.д.). Ниже в примерах я их сохранил.
+     комментарием (`# TODO`, `# default - 10m`, и т.д.). Ниже в примерах я их сохранил.
 > 2. **Локальная директория ключей**: `local_ssh_keys_dir: "{{ playbook_dir }}/../secrets/ssh"` вместо
-     > `"{{ local_home_path }}/.ssh"`. Соответственно `LOCAL_HOME_PATH` остаётся только для `ssh_known_hosts_path`
-     > (его всегда трогаем в `~/.ssh/known_hosts`).
+     `"{{ local_home_path }}/.ssh"`. Соответственно `LOCAL_HOME_PATH` остаётся только для `ssh_known_hosts_path`
+     (его всегда трогаем в `~/.ssh/known_hosts`).
 > 3. **Неиспользуемые переменные** (`site_ansible_password`, `target_user`):
-     >
-- `target_user` действительно нигде не нужен — удаляем.
->    - `site_ansible_password` сейчас лежит "на чёрный день" (можно было бы использовать в Stage 0 для входа по
-       > паролю до того как ключи скопированы). Поскольку мы решили использовать root-пароль только для первого
-       > ssh-входа админа и больше Ansible с паролем не работает — переменную тоже **удаляем**.
->    - `site_ansible_user: root` и `site_ansible_key: ~` — используются в Inventory. `site_ansible_key: ~` (нулевое
-       > значение) превращается в `ansible_ssh_private_key_file: null`, и Ansible использует дефолт. Заменяем на явный
-       > путь: `site_ansible_key: "{{ ordinary_key_path }}"`.
+     - `target_user` действительно нигде не нужен — удаляем.
+     - `site_ansible_password` сейчас лежит "на чёрный день" (можно было бы использовать в Stage 0 для входа по
+     паролю до того как ключи скопированы). Поскольку мы решили использовать root-пароль только для первого
+     ssh-входа админа и больше Ansible с паролем не работает — переменную тоже **удаляем**.
+     - `site_ansible_user: root` и `site_ansible_key: ~` — используются в Inventory. `site_ansible_key: ~` (нулевое
+     значение) превращается в `ansible_ssh_private_key_file: null`, и Ansible использует дефолт. Заменяем на явный
+     путь: `site_ansible_key: "{{ ordinary_key_path }}"`.
 > 4. **Подход с `vault.yml`**: ты прав, лучше так. В `group_vars/all/vault.yml` кладём **публичный маппинг**
      > `redis_password: "{{ vault_redis_password }}"`, `mysql_root_password: "{{ vault_mysql_root_password }}"` и т.д.
      > А сам файл `secrets/secrets.vault` подключаем глобально через **`ansible.cfg`**:
@@ -1590,8 +1592,8 @@ help:  ## Показать доступные команды
 
 > ⚠️ ЗАМЕЧАНИЕ: Переходим на генерацию и хранение ключей для текущего сервера в `ansible/secrets/ssh/`
 
-> 📝 ОТВЕТ AI: Принято. Конкретные правки уже учтены в разделе 5.3 (
-`local_ssh_keys_dir: "{{ playbook_dir }}/../secrets/ssh"`).
+> 📝 ОТВЕТ AI: Принято. 
+> Конкретные правки уже учтены в разделе 5.3 (`local_ssh_keys_dir: "{{ playbook_dir }}/../secrets/ssh"`).
 
 ---
 
