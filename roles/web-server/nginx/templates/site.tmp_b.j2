@@ -1,0 +1,136 @@
+# TODO Бэкап старого файла полного конфига, на всякий случай, цикл пока не проверяю, потом же еще CSRF добавлять
+server {
+   listen 80;
+   charset utf-8;
+   # This should match the `post_max_size` and/or `upload_max_filesize` settings in your php.ini.
+   # Это же frontend, здесь вообще файлы не загружаем.
+   client_max_body_size 10M;
+   sendfile off;
+   server_tokens off; # отключить отображение номера версии в сообщениях об ошибках и заголовке ответа
+
+   server_name {{ domain_name }} www.{{ domain_name }};
+   root        {{ web_root }}/{{ domain_name }}/app/frontend/pub/;
+   index       index.php;
+
+   # не загружать, если источник не совпадает (запретить загружать в Iframe)
+   add_header X-Frame-Options "SAMEORIGIN";
+   # запрещает браузерам "нюхать" (sniff) MIME-тип содержимого.
+   add_header X-Content-Type-Options "nosniff";
+
+   # Всё перенаправляем в stdout (настроено в /etc/nginx/nginx.conf) (для file2ban, и вообще давай учиться работать с systemd)
+   # access_log  /var/log/nginx/{{ domain_name }}/front-access.log;
+   # Всё перенаправляем в stderr (настроено в /etc/nginx/nginx.conf) (для file2ban, и вообще давай учиться работать с systemd)
+   # error_log   /var/log/nginx/{{ domain_name }}/front-error.log;
+
+   location ~ /\.(ht|svn|git|env|json|lock|yml) {
+       deny all;
+   }
+
+  location ~* \.(jpg|jpeg|png|gif|ico|css|js|woff|woff2|ttf|svg|eot|otf|ttc|ttf)$ {
+      expires 1y;
+      access_log off;
+      add_header Cache-Control "public";
+  }
+
+   location / {
+       # Redirect everything that isn't a real file to index.php
+       try_files $uri $uri/ /index.php$is_args$args; # Этот вариант хуже - "try_files $uri $uri/ /index.php?$query_string;" /// $is_args добавляет ? только если запрос содержит аргументы (например, ?key=value). Это предотвращает лишний символ ? в URL, если аргументов нет. /// $query_string — это полная строка запроса, включая ?. Использование $query_string может привести к двойному ? в некоторых случаях. /// Рекомендуется использовать $is_args$args, как в вашем шаблоне, для большей надёжности и чистоты URL.
+   }
+
+   # Определяет блок обработки запросов, соответствующих файлам с расширением .php. Модификатор ~ указывает на регистронезависимое регулярное выражение, а \.php$ означает, что обрабатываются запросы, заканчивающиеся на .php.
+   location ~ \.php$ {
+       # Защита от подмены path_info (Путь к файлу index.php?)
+       fastcgi_split_path_info ^(.+\.php)(/.+)$;
+       fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
+       fastcgi_index index.php;
+       include fastcgi_params;
+       fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+       fastcgi_param PATH_INFO $fastcgi_path_info;
+       try_files $uri =404;
+       fastcgi_read_timeout 60s;
+       fastcgi_connect_timeout 60s;
+       fastcgi_send_timeout 60s;
+   }
+
+}
+
+server {
+   listen 80;
+   charset utf-8;
+   client_max_body_size 750M;
+   sendfile off;
+   server_tokens off; # отключить отображение версии в сообщениях об ошибках и заголовке ответа
+
+   server_name adm.{{ domain_name }} www.adm.{{ domain_name }};
+   root        {{ web_root }}/{{ domain_name }}/app/backend/pub/;
+   index       index.php;
+
+   # не загружать, если источник не совпадает (запретить загружать в Iframe)
+   add_header X-Frame-Options "SAMEORIGIN";
+   # запрещает браузерам "нюхать" (sniff) MIME-тип содержимого.
+   add_header X-Content-Type-Options "nosniff";
+
+   # Всё перенаправляем в stdout (настроено в /etc/nginx/nginx.conf) (для file2ban, и вообще давай учиться работать с systemd)
+   # access_log  /var/log/nginx/{{ domain_name }}/back-access.log;
+   # Всё перенаправляем в stderr (настроено в /etc/nginx/nginx.conf) (для file2ban, и вообще давай учиться работать с systemd)
+   # error_log   /var/log/nginx/{{ domain_name }}/back-error.log;
+
+   location ~ /\.(ht|svn|git|env|json|lock|yml) {
+       deny all;
+   }
+
+   location / {
+       # Redirect everything that isn't a real file to index.php
+       try_files $uri $uri/ /index.php$is_args$args;
+   }
+
+   # Определяет блок обработки запросов, соответствующих файлам с расширением .php. Модификатор ~ указывает на регистронезависимое регулярное выражение, а \.php$ означает, что обрабатываются запросы, заканчивающиеся на .php.
+   location ~ \.php$ {
+       # Защита от подмены path_info (Путь к файлу index.php?)
+       fastcgi_split_path_info ^(.+\.php)(/.+)$;
+       fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
+       fastcgi_index index.php;
+       include fastcgi_params;
+       fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+       fastcgi_param PATH_INFO $fastcgi_path_info;
+       try_files $uri =404;
+       fastcgi_read_timeout 300s;
+       fastcgi_connect_timeout 300s;
+       fastcgi_send_timeout 300s;
+   }
+
+}
+
+server {
+   listen 80;
+   charset utf-8;
+   client_max_body_size 1024M;
+   sendfile on;
+   server_tokens off; # отключить отображение версии в сообщениях об ошибках и заголовке ответа
+
+   server_name files.{{ domain_name }} www.files.{{ domain_name }};
+   root        {{ web_root }}/{{ domain_name }}/app/static/;
+
+   # не загружать, если источник не совпадает (запретить загружать в Iframe)
+   add_header X-Frame-Options "SAMEORIGIN";
+   # запрещает браузерам "нюхать" (sniff) MIME-тип содержимого.
+   add_header X-Content-Type-Options "nosniff";
+
+   # Всё перенаправляем в stderr (настроено в /etc/nginx/nginx.conf) (для file2ban, и вообще давай учиться работать с systemd)
+   # error_log   /var/log/nginx/{{ domain_name }}/static-error.log;
+
+   location ~* \.(jpg|jpeg|png|gif|ico|css|js|woff|woff2|ttf|svg|eot|otf|ttc|ttf)$ {
+      expires 1y;
+      access_log off;
+      add_header Cache-Control "public";
+   }
+
+   location ~ \.php$ {
+      deny all;
+   }
+
+   location ~ /\.(ht|svn|git|env|json|lock|yml) {
+       deny all;
+   }
+
+}
