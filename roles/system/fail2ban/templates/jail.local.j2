@@ -91,7 +91,7 @@ enabled = {{ jailsEnableStatus.recidive | bool | lower }}
 enabled = {{ jailsEnableStatus['php-fpm'] | bool | lower }}
 port = http,https
 filter = php-fpm
-logpath = /var/log/php{{ php-version }}-fpm.log
+logpath = /var/log/php{{ php_version }}-fpm.log
 backend = polling ; т.к. по умолчанию исп-я systemd, а здесь исп-я файл
 
 [redis-auth]

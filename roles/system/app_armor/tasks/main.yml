@@ -26,12 +26,12 @@
 - name: Create AppArmor profile for PHP-FPM
   template:
     src: usr.sbin.php-fpm.j2
-    dest: /etc/apparmor.d/usr.sbin.php-fpm{{ php-version }}
+    dest: /etc/apparmor.d/usr.sbin.php-fpm{{ php_version }}
     mode: '0644'
   notify: Reload AppArmor
 
 - name: Set php-fpm profile to complain mode
-  command: aa-complain /etc/apparmor.d/usr.sbin.php-fpm{{ php-version }}
+  command: aa-complain /etc/apparmor.d/usr.sbin.php-fpm{{ php_version }}
   changed_when: false
   notify: Reload AppArmor
 

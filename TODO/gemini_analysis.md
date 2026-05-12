@@ -12,7 +12,7 @@
   `error_log = syslog`. Это означает, что логи улетают в `systemd-journald`.
 
 * **Где ищет Fail2Ban:** В `jail.local.j2` для `[php-fpm]` вы указываете `backend = polling` и путь к файлу
-  `/var/log/php{{ php-version }}-fpm.log`.
+  `/var/log/php{{ php_version }}-fpm.log`.
 
 * **Проблема:** Если PHP пишет в syslog, файл `/var/log/php...log` либо будет пустым, либо вообще не будет обновляться (
   в зависимости от настроек rsyslog, которого может не быть в Ubuntu 24.04 по умолчанию). Fail2Ban не увидит атак.
@@ -23,7 +23,7 @@ systemd, лучше второе:
 
 1. Уберите `backend = polling` и `logpath` из секции `[php-fpm]` в `jail.local.j2`.
 2. Добавьте `backend = systemd` (или используйте глобальный).
-3. Используйте `journalmatch = _SYSTEMD_UNIT=php{{ php-version }}-fpm.service + _COMM=php-fpm{{ php-version }}` (
+3. Используйте `journalmatch = _SYSTEMD_UNIT=php{{ php_version }}-fpm.service + _COMM=php-fpm{{ php_version }}` (
    примерно, нужно проверить точное имя юнита).
 
 ### 2. Избыточная компиляция модулей (PCNTL)

@@ -40,7 +40,7 @@ server {
    location ~ \.php$ {
        # Защита от подмены path_info (Путь к файлу index.php?)
        fastcgi_split_path_info ^(.+\.php)(/.+)$;
-       fastcgi_pass unix:/run/php/php{{ php-version }}-fpm.sock;
+       fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
        fastcgi_index index.php;
        include fastcgi_params;
        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
@@ -87,7 +87,7 @@ server {
    location ~ \.php$ {
        # Защита от подмены path_info (Путь к файлу index.php?)
        fastcgi_split_path_info ^(.+\.php)(/.+)$;
-       fastcgi_pass unix:/run/php/php{{ php-version }}-fpm.sock;
+       fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
        fastcgi_index index.php;
        include fastcgi_params;
        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;

@@ -29,7 +29,7 @@ Severalnines, для PHP-FPM — из специализированных ру�
     hosts: all
     become: true
     vars:
-        php-version: "7.4"  # Укажите вашу версию PHP
+        php_version: "7.4"  # Укажите вашу версию PHP
 
     tasks:
         -   name: Install AppArmor packages
@@ -58,12 +58,12 @@ Severalnines, для PHP-FPM — из специализированных ру�
         -   name: Create AppArmor profile for PHP-FPM
             template:
                 src: templates/usr.sbin.php-fpm.j2
-                dest: /etc/apparmor.d/usr.sbin.php-fpm{{ php-version }}
+                dest: /etc/apparmor.d/usr.sbin.php-fpm{{ php_version }}
                 mode: '0644'
             notify: Reload AppArmor
 
         -   name: Enforce PHP-FPM profile
-            command: aa-enforce /etc/apparmor.d/usr.sbin.php-fpm{{ php-version }}
+            command: aa-enforce /etc/apparmor.d/usr.sbin.php-fpm{{ php_version }}
             ignore_errors: true
             notify: Reload AppArmor
 
@@ -131,17 +131,17 @@ Severalnines, для PHP-FPM — из специализированных ру�
    ```
    #include <tunables/global>
    
-   /usr/sbin/php-fpm{{ php-version }} {
+   /usr/sbin/php-fpm{{ php_version }} {
      #include <abstractions/base>
      #include <abstractions/php>
    
      capability dac_override,
      capability sys_resource,
    
-     /etc/php/{{ php-version }}/fpm/** r,
+     /etc/php/{{ php_version }}/fpm/** r,
      /var/www/** rwk,  # Доступ к веб-файлам
-     /run/php/php{{ php-version }}-fpm.sock rw,
-     /usr/sbin/php-fpm{{ php-version }} ix,
+     /run/php/php{{ php_version }}-fpm.sock rw,
+     /usr/sbin/php-fpm{{ php_version }} ix,
      deny /etc/shadow r,  # Ограничение чувствительных файлов
    }
    ```

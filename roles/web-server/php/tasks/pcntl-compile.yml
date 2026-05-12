@@ -11,7 +11,7 @@
 - name: Install dependencies for compiling PHP pcntl
   ansible.builtin.apt:
     name:
-      - php{{ php-version }}-dev  # Необходим для компиляции расширений
+      - php{{ php_version }}-dev  # Необходим для компиляции расширений
       - build-essential
       - libpcre3-dev
     state: present
@@ -19,19 +19,19 @@
 
 - name: Download PHP source code
   ansible.builtin.get_url:
-    url: https://www.php.net/distributions/php-{{ php-version }}.tar.gz
-    dest: /tmp/php-{{ php-version }}.tar.gz
+    url: https://www.php.net/distributions/php-{{ php_version }}.tar.gz
+    dest: /tmp/php-{{ php_version }}.tar.gz
     mode: '0644'
 
 - name: Extract PHP source code
   ansible.builtin.unarchive:
-    src: /tmp/php-{{ php-version }}.tar.gz
+    src: /tmp/php-{{ php_version }}.tar.gz
     dest: /tmp
     remote_src: yes
 
 - name: Compile pcntl extension
   ansible.builtin.shell: |
-    cd /tmp/php-{{ php-version }}/ext/pcntl
+    cd /tmp/php-{{ php_version }}/ext/pcntl
     phpize
     ./configure
     make
@@ -43,12 +43,12 @@
 
 - name: Enable pcntl extension
   ansible.builtin.lineinfile:
-    path: /etc/php/{{ php-version }}/cli/php.ini
+    path: /etc/php/{{ php_version }}/cli/php.ini
     line: "extension=pcntl.so"
     state: present
   notify: Restart PHP-FPM
 
 - name: Clean up PHP source code
   ansible.builtin.file:
-    path: /tmp/php-{{ php-version }}
+    path: /tmp/php-{{ php_version }}
     state: absent

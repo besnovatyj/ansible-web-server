@@ -1,15 +1,15 @@
 #include <tunables/global>
 
-/usr/sbin/php-fpm{{ php-version }} {
+/usr/sbin/php-fpm{{ php_version }} {
   #include <abstractions/base>
   #include <abstractions/php>
 
   capability dac_override,
   capability sys_resource,
 
-  /etc/php/{{ php-version }}/fpm/** r,
+  /etc/php/{{ php_version }}/fpm/** r,
   /var/www/** rwk,  # Доступ к веб-файлам
-  /run/php/php{{ php-version }}-fpm.sock rw,
-  /usr/sbin/php-fpm{{ php-version }} ix,
-  /var/log/php{{ php-version }}-fpm.log rw,
+  /run/php/php{{ php_version }}-fpm.sock rw,
+  /usr/sbin/php-fpm{{ php_version }} ix,
+  /var/log/php{{ php_version }}-fpm.log rw,
 }

@@ -1,6 +1,6 @@
 [global]
-  pid = /run/php/php{{ php-version }}-fpm.pid
+  pid = /run/php/php{{ php_version }}-fpm.pid
   error_log = syslog
   syslog.facility = daemon
   syslog.ident = php-fpm
-  include = /etc/php/{{ php-version }}/fpm/pool.d/*.conf
+  include = /etc/php/{{ php_version }}/fpm/pool.d/*.conf

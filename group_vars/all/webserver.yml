@@ -3,7 +3,7 @@
 # PHP
 ##########################################################
 
-php-version: 8.4 # Стабильная версия из "https://packages.ubuntu.com/" для "Ubuntu 24.04.3 (Noble Numbat)"
+php_version: 8.4 # Стабильная версия из "https://packages.ubuntu.com/" для "Ubuntu 24.04.3 (Noble Numbat)"
 
 # --------------------------------------------------------
 # PHP
@@ -15,27 +15,27 @@ php-version: 8.4 # Стабильная версия из "https://packages.ubun
 # --------------------------------------------------------
 
 php_modules: [
-  "php{{ php-version }}-fpm",
-  "php{{ php-version }}-cli",
-  "php{{ php-version }}-common", # Содержит calendar
-  "php{{ php-version }}-mysqlnd",
-  "php{{ php-version }}-mysql", # Содержит pdo_mysql
-  "php{{ php-version }}-redis",
-  "php{{ php-version }}-zip",
-  "php{{ php-version }}-gd",
-  "php{{ php-version }}-mbstring",
-  "php{{ php-version }}-curl",
-  "php{{ php-version }}-xml", # Содержит simplexml, dom
-  "php{{ php-version }}-apcu", # Заметки: Версия 5.1.24; для кэширования; включить apcu.enable=1 в conf.d/apcu.ini
-  "php{{ php-version }}-intl", # TODO проверить что работает (должны работать форматтеры Yii2)
-  "php{{ php-version }}-bcmath",
-  "php{{ php-version }}-fileinfo",
-  "php{{ php-version }}-pdo",
-  "php{{ php-version }}-opcache", # Включить opcache.enable=1 в conf.d/opcache.ini. Конфигурируйте для производительности.
-  "php{{ php-version }}-exif",
-  "php{{ php-version }}-imagick",
-  "php{{ php-version }}-memcached",
-  #  "php{{ php-version }}-pcntl" # Только CLI, в FPM не работает
+  "php{{ php_version }}-fpm",
+  "php{{ php_version }}-cli",
+  "php{{ php_version }}-common", # Содержит calendar
+  "php{{ php_version }}-mysqlnd",
+  "php{{ php_version }}-mysql", # Содержит pdo_mysql
+  "php{{ php_version }}-redis",
+  "php{{ php_version }}-zip",
+  "php{{ php_version }}-gd",
+  "php{{ php_version }}-mbstring",
+  "php{{ php_version }}-curl",
+  "php{{ php_version }}-xml", # Содержит simplexml, dom
+  "php{{ php_version }}-apcu", # Заметки: Версия 5.1.24; для кэширования; включить apcu.enable=1 в conf.d/apcu.ini
+  "php{{ php_version }}-intl", # TODO проверить что работает (должны работать форматтеры Yii2)
+  "php{{ php_version }}-bcmath",
+  "php{{ php_version }}-fileinfo",
+  "php{{ php_version }}-pdo",
+  "php{{ php_version }}-opcache", # Включить opcache.enable=1 в conf.d/opcache.ini. Конфигурируйте для производительности.
+  "php{{ php_version }}-exif",
+  "php{{ php_version }}-imagick",
+  "php{{ php_version }}-memcached",
+  #  "php{{ php_version }}-pcntl" # Только CLI, в FPM не работает
 ]
 
 ##########################################################
