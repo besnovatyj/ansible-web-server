@@ -20,7 +20,7 @@
 - name: Copy host settings
   ansible.builtin.template:
     src: site.tmp.j2
-    dest: "/etc/nginx/sites-available/{{ DOMAIN_NAME }}.conf"
+    dest: "/etc/nginx/sites-available/{{ domain_name }}.conf"
     owner: root
     group: root
     mode: 0644
@@ -28,8 +28,8 @@
 
 - name: Create host available to enabled symbolic link
   ansible.builtin.file:
-    src: "/etc/nginx/sites-available/{{ DOMAIN_NAME }}.conf"
-    dest: "/etc/nginx/sites-enabled/{{ DOMAIN_NAME }}.conf"
+    src: "/etc/nginx/sites-available/{{ domain_name }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ domain_name }}.conf"
     state: link
   notify: Restart nginx
 
@@ -64,11 +64,11 @@
   changed_when: false
   notify: Restart nginx
 
-# Убедитесь, что директории, указанные в site.tmp.j2 (например, /var/www/{{ DOMAIN_NAME }}/app/frontend/pub/), существуют и имеют правильные права:
+# Убедитесь, что директории, указанные в site.tmp.j2 (например, /var/www/{{ domain_name }}/app/frontend/pub/), существуют и имеют правильные права:
 # Если директории отсутствуют, добавьте задачу для их создания:
 #- name: Create web root directories
 #  ansible.builtin.file:
-#    path: "{{ web_root }}/{{ DOMAIN_NAME }}/app/{{ item }}"
+#    path: "{{ web_root }}/{{ domain_name }}/app/{{ item }}"
 #    state: directory
 #    owner: www-data
 #    group: www-data

@@ -2,19 +2,19 @@
 - name: Sync site files # https://stackoverflow.com/a/27995384
   ansible.posix.synchronize:
     src: /mnt/a/openserver/domains/TODO/scripts/ansible/roles/data_transfer/data
-    dest: {{ web_root }}/{{ DOMAIN_NAME }}/
+    dest: {{ web_root }}/{{ domain_name }}/
     delete: yes # Удалит файлы на сервере, которых нет локально (опционально)
     # checksum=true # По-умолчанию rsync использует для сравнения "mod-time" и "file size", если нужно сравнивать по содержимому, то включить эту опцию (checksum=true)
 
 - name: Change file ownership, group and permissions (7777)
   ansible.builtin.file:
     path: [
-      "{{ web_root }}/{{ DOMAIN_NAME }}/pub/storage/runtime",
-      "{{ web_root }}/{{ DOMAIN_NAME }}/pub/web/static/cache",
-      "{{ web_root }}/{{ DOMAIN_NAME }}/pub/web/static/files",
-      "{{ web_root }}/{{ DOMAIN_NAME }}/pub/web/static/origin",
-      "{{ web_root }}/{{ DOMAIN_NAME }}/pub/web/front/assets",
-      "{{ web_root }}/{{ DOMAIN_NAME }}/pub/web/back/assets",
+      "{{ web_root }}/{{ domain_name }}/pub/storage/runtime",
+      "{{ web_root }}/{{ domain_name }}/pub/web/static/cache",
+      "{{ web_root }}/{{ domain_name }}/pub/web/static/files",
+      "{{ web_root }}/{{ domain_name }}/pub/web/static/origin",
+      "{{ web_root }}/{{ domain_name }}/pub/web/front/assets",
+      "{{ web_root }}/{{ domain_name }}/pub/web/back/assets",
     ]
     owner: "{{ ftp_user }}"
     group: "{{ ftp_group }}"

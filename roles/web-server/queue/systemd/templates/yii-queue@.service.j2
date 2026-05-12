@@ -9,7 +9,7 @@ Requires=redis.service
 [Service]
 User=www-data
 Group=www-data
-ExecStart=/usr/bin/php {{ item.web_root }}/{{ item.DOMAIN_NAME }}/yii queue/listen --verbose
+ExecStart=/usr/bin/php {{ item.web_root }}/{{ item.domain_name }}/yii queue/listen --verbose
 Restart=on-failure
 
 [Install]

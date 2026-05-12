@@ -17,7 +17,7 @@
 
 # TODO: Добавьте условие: если сертификат существует (`/etc/letsencrypt/live/{{ domain }}/fullchain.pem`), то skip (используйте stat-модуль)
 - name: Получение SSL-сертификата (интерактивно, адаптируй)
-  command: certbot --nginx -d {{ DOMAIN_NAME }} --non-interactive --agree-tos --email {{ certbot_email }}
+  command: certbot --nginx -d {{ domain_name }} --non-interactive --agree-tos --email {{ certbot_email }}
 
 - name: Настройка автообновления сертификатов
   cron:

@@ -79,7 +79,7 @@ systemd, лучше второе:
 -  name: Sync site files
    ansible.posix.synchronize:
       src: /local/path/
-      dest: { { web_root } }/{{ DOMAIN_NAME }}/
+      dest: { { web_root } }/{{ domain_name }}/
       delete: yes # Удалит файлы на сервере, которых нет локально (опционально)
 
 ```

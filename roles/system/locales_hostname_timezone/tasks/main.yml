@@ -23,4 +23,4 @@
 
 - name: Set hostname
   shell:
-    cmd: "hostnamectl set-hostname {{ DOMAIN_NAME }}"
+    cmd: "hostnamectl set-hostname {{ domain_name }}"

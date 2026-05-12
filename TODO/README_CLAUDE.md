@@ -59,7 +59,7 @@ make galaxy-mysql-crypto
 Отредактируйте `group_vars/global.yml`:
 
 ```yaml
-DOMAIN_NAME: your-domain.ru
+domain_name: your-domain.ru
 time_zone: Europe/Moscow  # или Asia/Yekaterinburg
 new_user: your_username   # sudo-пользователь вместо root
 ```

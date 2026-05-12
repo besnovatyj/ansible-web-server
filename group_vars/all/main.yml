@@ -2,7 +2,7 @@
 # GLOBAL
 ##########################################################
 
-DOMAIN_NAME: domain.zone
+domain_name: domain.zone
 HOST_IP: "{{ hostvars[groups['site'][0]]['ansible_host'] }}"
 web_root: "/var/www"
 locale1: ru_RU.UTF-8
