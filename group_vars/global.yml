@@ -27,6 +27,7 @@ ssh_key_type: "ed25519" # или "rsa" (только если не поддер�
 ssh_key_size: 0 # Для RSA указать `4096`. Для ed25519 длина фиксированная.
 ssh_key_passphrase: "{{ vault_ssh_key_passphrase }}"
 target_ssh_port: 22 # TODO - лучше потом поменять порт по умолчанию для SSH
+
 ############### Пути к ключам
 local_ssh_keys_dir: "{{ LOCAL_HOME_PATH }}/.ssh"
 # ssh_keys_dir: "{{ ansible_env.HOME }}/.ssh" # ansible_env — это facts целевого хоста, а не контроллера
@@ -34,6 +35,7 @@ ordinary_key_path: "{{ local_ssh_keys_dir }}/key_{{ DOMAIN_NAME }}"
 ordinary_pubkey_path: "{{ ordinary_key_path }}.pub"
 emergency_key_path: "{{ local_ssh_keys_dir }}/key_{{ DOMAIN_NAME }}_emergency_root"
 emergency_pubkey_path: "{{ emergency_key_path }}.pub"
+
 ############### Куда копируем
 target_host: "{{ hostvars[groups['site'][0]]['ansible_host']}}"
 target_user: "{{ hostvars[groups['site'][0]]['ansible_user']}}"
