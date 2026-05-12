@@ -4,16 +4,16 @@
 ##########################################################
 
 ############### Общее
-LOCAL_HOME_PATH: "{{ lookup('env', 'HOME') }}"
+local_home_path: "{{ lookup('env', 'HOME') }}"
 force_key_regen: false # true — принудительно регенерировать ключи (бэкапит существующие в той же директории)
-ssh_known_hosts_path: "{{ LOCAL_HOME_PATH }}/.ssh/known_hosts"
+ssh_known_hosts_path: "{{ local_home_path }}/.ssh/known_hosts"
 ssh_key_type: "ed25519" # или "rsa" (только если не поддерживается ed25519, например, если версия OpenSSH ниже 6.5)
 ssh_key_size: 0 # Для RSA указать `4096`. Для ed25519 длина фиксированная.
 ssh_key_passphrase: "{{ vault_ssh_key_passphrase }}" # Технически в Ansible 2.18+ есть `ansible_ssh_private_key_passphrase` / расширения community.crypto
 target_ssh_port: 22 # TODO - лучше потом поменять порт по умолчанию для SSH
 
 ############### Пути к ключам
-local_ssh_keys_dir: "{{ LOCAL_HOME_PATH }}/.ssh"
+local_ssh_keys_dir: "{{ local_home_path }}/.ssh"
 # ssh_keys_dir: "{{ ansible_env.HOME }}/.ssh" # ansible_env — это facts целевого хоста, а не контроллера
 ordinary_key_path: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}"
 ordinary_pubkey_path: "{{ ordinary_key_path }}.pub"
