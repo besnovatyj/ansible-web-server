@@ -10,22 +10,22 @@ max_retry: 5
 # NB: Защищаем точки входа, а не всё подряд.
 # Если сервис имеет доступ снаружи сервера, тогда защищаем,
 # иначе просто закрываем доступ извне на уровне фаервола.
-jailsEnableStatus:
+jails_enable_status:
   # Предустановленные
   sshd: true
-  nginx-http-auth: true
-  nginx-limit-req: false # Чтобы включить, сначала прочитай описание в файле конфига
-  nginx-botsearch: true
-  nginx-bad-request: true
-  nginx-forbidden: true
-  php-url-fopen: true
+  nginx_http_auth: true
+  nginx_limit_req: false # Чтобы включить, сначала прочитай описание в файле конфига
+  nginx_botsearch: true
+  nginx_bad_request: true
+  nginx_forbidden: true
+  php_url_fopen: true
   vsftpd: false # Не устанавливаем. Зачем, если есть WinSCP
-  mysqld-auth: false # Слушает только localhost
-  traefik-auth: false # Сначала настрой его. :)
+  mysqld_auth: false # Слушает только localhost
+  traefik_auth: false # Сначала настрой его. :)
   recidive: true
-  sendmail-auth: false
-  sendmail-reject: false
+  sendmail_auth: false
+  sendmail_reject: false
   # Добавленные
-  php-fpm: false # Для защиты от брутфорса PHP-приложений. Логирование см. ANALYSIS 3.2.6
-  redis-auth: false # Слушает только localhost
-  yii2-auth: false # Включится после внедрения Monolog→SyslogHandler в Yii2. См. ANALYSIS 3.2.6
+  php_fpm: false # Для защиты от брутфорса PHP-приложений. Логирование см. ANALYSIS 3.2.6
+  redis_auth: false # Слушает только localhost
+  yii2_auth: false # Включится после внедрения Monolog→SyslogHandler в Yii2. См. ANALYSIS 3.2.6

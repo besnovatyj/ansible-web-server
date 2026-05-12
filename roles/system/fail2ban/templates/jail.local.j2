@@ -53,34 +53,34 @@ banaction_allports = ufw ; default `iptables-allports`
 #
 
 [sshd]
-enabled = {{ jailsEnableStatus.sshd| bool | lower }}
+enabled = {{ jails_enable_status.sshd| bool | lower }}
 
 [nginx-http-auth]
-enabled = {{ jailsEnableStatus['nginx-http-auth'] | bool | lower }}
+enabled = {{ jails_enable_status['nginx_http_auth'] | bool | lower }}
 
 [nginx-limit-req]
-enabled = {{ jailsEnableStatus['nginx-limit-req'] | bool | lower }}
+enabled = {{ jails_enable_status['nginx_limit_req'] | bool | lower }}
 
 [nginx-botsearch]
-enabled = {{ jailsEnableStatus['nginx-botsearch'] | bool | lower }}
+enabled = {{ jails_enable_status['nginx_botsearch'] | bool | lower }}
 
 [nginx-bad-request]
-enabled = {{ jailsEnableStatus['nginx-bad-request'] | bool | lower }}
+enabled = {{ jails_enable_status['nginx_bad_request'] | bool | lower }}
 
 [nginx-forbidden]
-enabled = {{ jailsEnableStatus['nginx-forbidden'] | bool | lower }}
+enabled = {{ jails_enable_status['nginx_forbidden'] | bool | lower }}
 
 [php-url-fopen]
-enabled = {{ jailsEnableStatus['php-url-fopen'] | bool | lower }}
+enabled = {{ jails_enable_status['php_url_fopen'] | bool | lower }}
 
 [sendmail-auth]
-enabled = {{ jailsEnableStatus['sendmail-auth'] | bool | lower }}
+enabled = {{ jails_enable_status['sendmail_auth'] | bool | lower }}
 
 [sendmail-reject]
-enabled = {{ jailsEnableStatus['sendmail-reject'] | bool | lower }}
+enabled = {{ jails_enable_status['sendmail_reject'] | bool | lower }}
 
 [recidive]
-enabled = {{ jailsEnableStatus.recidive | bool | lower }}
+enabled = {{ jails_enable_status.recidive | bool | lower }}
 
 #
 # Добавленные
@@ -88,7 +88,7 @@ enabled = {{ jailsEnableStatus.recidive | bool | lower }}
 
 [php-fpm]
 # Для защиты от брутфорса PHP-приложений. Для этого настройте PHP-FPM на логирование ошибок авторизации в отдельный файл.
-enabled = {{ jailsEnableStatus['php-fpm'] | bool | lower }}
+enabled = {{ jails_enable_status['php_fpm'] | bool | lower }}
 port = http,https
 filter = php-fpm
 logpath = /var/log/php{{ php_version }}-fpm.log
@@ -96,6 +96,6 @@ backend = polling ; т.к. по умолчанию исп-я systemd, а зде�
 
 [redis-auth]
 # Убедитесь, что Redis пишет логи в systemd.
-enabled = {{ jailsEnableStatus['redis-auth'] | bool | lower }}
+enabled = {{ jails_enable_status['redis_auth'] | bool | lower }}
 port = 6379
 filter = redis-auth
