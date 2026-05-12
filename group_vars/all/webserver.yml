@@ -58,3 +58,24 @@ keep_mysql_root_hosts:
 ##########################################################
 
 certbot_email: 'name@domain.zone'
+
+##########################################################
+# NGINX SITES
+##########################################################
+
+nginx_sites:
+  - name: frontend
+    server_name: "{{ domain_name }} www.{{ domain_name }}"
+    web_root: "{{ web_root }}/{{ domain_name }}/app/frontend/pub"
+    client_max_body_size: 10M
+    php_fpm: true
+  - name: backend
+    server_name: "adm.{{ domain_name }} www.adm.{{ domain_name }}"
+    web_root: "{{ web_root }}/{{ domain_name }}/app/backend/pub"
+    client_max_body_size: 750M
+    php_fpm: true
+  - name: static
+    server_name: "files.{{ domain_name }} www.files.{{ domain_name }}"
+    web_root: "{{ web_root }}/{{ domain_name }}/app/static"
+    client_max_body_size: 1024M
+    php_fpm: false
