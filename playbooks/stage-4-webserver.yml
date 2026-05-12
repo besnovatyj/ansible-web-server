@@ -1,0 +1,35 @@
+##########################################################
+# Stage 4: LEMP-стек
+# Redis, Memcached, MySQL, Nginx, PHP + очистка apt.
+##########################################################
+---
+- name: Pre-flight checks for stage 4
+  hosts: site
+  gather_facts: false
+  tasks:
+    - name: Assert vault-derived variables
+      assert:
+        that:
+          - vault_mysql_root_password is defined and vault_mysql_root_password | length > 0
+          - vault_mysql_db_user_password is defined and vault_mysql_db_user_password | length > 0
+          # vault_redis_password добавится в фазе H1
+        fail_msg: |
+          Required vault variables are missing.
+          Проверьте что group_vars/all/secrets.vault расшифровывается и содержит ключи.
+
+- name: Stage 4 - LEMP stack installation
+  hosts: site
+  remote_user: root
+  gather_facts: true
+  roles:
+    - ../roles/web-server/redis
+    - ../roles/web-server/memcached
+    - ../roles/web-server/mysql
+    - ../roles/web-server/nginx
+    - ../roles/web-server/php
+
+- name: Stage 4 - Cleanup
+  hosts: site
+  remote_user: root
+  roles:
+    - ../roles/system/apt_clean
