@@ -1,0 +1,18 @@
+---
+##########################################################
+# Публичный маппинг vault-переменных
+# Сами зашифрованные значения хранятся в group_vars/all/secrets.vault
+# (перенесём туда в шаге C7).
+##########################################################
+
+# vault_ssh_key_passphrase уже маппится в ssh.yml на ssh_key_passphrase — не дублируем здесь
+
+# Имена с суффиксом `_from_vault` — чтобы не конфликтовать с такими же ключами в
+# `webserver.yml` (`mysql_root_password: "{{ vault_mysql_root_password }}"`). Альтернатива
+# — переписать `webserver.yml` так, чтобы он не маппил vault, а только использовал
+# маппинг из этого файла. Решить при реализации.
+
+site_ansible_password: "{{ vault_root_password }}"
+mysql_root_password_from_vault: "{{ vault_mysql_root_password }}"
+mysql_db_user_password_from_vault: "{{ vault_mysql_db_user_password }}"
+redis_password_from_vault: "{{ vault_redis_password | default('') }}"
