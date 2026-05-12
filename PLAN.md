@@ -351,8 +351,40 @@ stage7_ssh_key_passphrase: "{{ vault_ssh_key_passphrase | default('') }}"
 
 ### F1. Новая роль `verify_ssh`
 
-Создать `roles/system/verify_ssh/tasks/main.yml` с задачей из B2, параметризованной через
-`verify_ssh_user` (root / new_user). Эта роль будет использоваться в Stage 2 и Stage 3.
+Создать `roles/system/verify_ssh/` с параметризацией **через `vars:` блок при `include_role`**
+— не через group_vars (иначе в одном плейбуке проверим только одного пользователя).
+
+`roles/system/verify_ssh/defaults/main.yml`:
+```yaml
+# Переопределяется в вызывающем плейбуке.
+verify_ssh_user: root
+verify_ssh_key: "{{ emergency_key_path }}"
+```
+
+`roles/system/verify_ssh/tasks/main.yml` — задача из B2, использует
+`{{ verify_ssh_user }}` и `{{ verify_ssh_key }}` (важно: ключ тоже параметризуется, т.к.
+root проверяется emergency-ключом, а new_user — обычным).
+
+Вызов роли в Stage 2 / Stage 3 — двумя последовательными `include_role` с `vars:`:
+
+```yaml
+- name: Verify root SSH login via emergency key
+  include_role:
+    name: verify_ssh
+  vars:
+    verify_ssh_user: root
+    verify_ssh_key: "{{ emergency_key_path }}"
+
+- name: Verify sudo user SSH login via ordinary key
+  include_role:
+    name: verify_ssh
+  vars:
+    verify_ssh_user: "{{ new_user }}"
+    verify_ssh_key: "{{ ordinary_key_path }}"
+```
+
+Альтернатива (если будем вызывать в 3+ местах) — список `verify_ssh_checks` и `loop:` по
+нему внутри роли. Пока двух вызовов хватает, оставляем простую параметризацию.
 
 **Коммит:** `feat(ansible): add verify_ssh role for real SSH key login check`
 
@@ -386,8 +418,9 @@ Pre-flight assert: проверить базовые переменные (`doma
 ### F5. `playbooks/stage-2-server-access.yml`
 
 Роли: `user_sudo_add_new`, `ssh_remote_root_keys` (после фикса B1 — деплоит emergency),
-`ssh_remote_user_keys` (новая, F2), `ssh_logs_journald`, `verify_ssh` (с `verify_ssh_user:
-root` и затем с `verify_ssh_user: "{{ new_user }}"`).
+`ssh_remote_user_keys` (новая, F2), `ssh_logs_journald`, далее **два вызова** `verify_ssh`
+через `include_role` + `vars:` (root с emergency_key_path, new_user с ordinary_key_path —
+см. F1).
 
 Pre-flight assert: vault-переменные для пароля sudo-пользователя.
 `remote_user: root`.
@@ -397,10 +430,10 @@ Pre-flight assert: vault-переменные для пароля sudo-поль�
 ### F6. `playbooks/stage-3-server-security.yml`
 
 **Порядок (внешний обзор, п. 6 — поправлен относительно ANALYSIS 5.2):**
-1. pre-check `verify_ssh` (root + new_user)
+1. pre-check `verify_ssh` — два вызова (root по emergency, new_user по ordinary), как в F5
 2. `ufw`
 3. `ssh_remote_security` — отключение пароля, hardening sshd
-4. post-check `verify_ssh` (новые подключения проходят по ключу)
+4. post-check `verify_ssh` — те же два вызова после hardening
 5. `fail2ban` — поднимаем jails **после** post-check, чтобы серия проверочных подключений
    не успела забанить контроллер
 6. `app_armor` (complain mode после B4) — опционально, можно сразу запустить или
