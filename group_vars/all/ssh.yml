@@ -9,8 +9,11 @@ force_key_regen: false # true — принудительно регенерир�
 ssh_known_hosts_path: "{{ local_home_path }}/.ssh/known_hosts"
 ssh_key_type: "ed25519" # или "rsa" (только если не поддерживается ed25519, например, если версия OpenSSH ниже 6.5)
 ssh_key_size: 0 # Для RSA указать `4096`. Для ed25519 длина фиксированная.
-ssh_key_passphrase: "{{ vault_ssh_key_passphrase }}" # Технически в Ansible 2.18+ есть `ansible_ssh_private_key_passphrase` / расширения community.crypto
 target_ssh_port: 22 # TODO - лучше потом поменять порт по умолчанию для SSH
+# TODO Технически в Ansible 2.18+ есть `ansible_ssh_private_key_passphrase` / расширения community.crypto
+# Stages 0–6 работают БЕЗ passphrase. Vault-переменная зарезервирована за Stage 7.
+ssh_key_passphrase: ""
+stage7_ssh_key_passphrase: "{{ vault_ssh_key_passphrase | default('') }}"
 
 ############### Пути к ключам
 local_ssh_keys_dir: "{{ playbook_dir }}/../secrets/ssh" # Была домашняя директория -  "{{ local_home_path }}/.ssh"
