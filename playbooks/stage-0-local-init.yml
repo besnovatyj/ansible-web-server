@@ -1,0 +1,24 @@
+##########################################################
+# Stage 0: локальная инициализация
+# 1) Pre-flight: проверка что inventory загружен
+# 2) Генерация SSH-ключей (ordinary + emergency) в secrets/ssh/
+# 3) Добавление отпечатка сервера в ~/.ssh/known_hosts
+##########################################################
+---
+- name: Pre-flight checks for stage 0
+  hosts: localhost
+  gather_facts: false # для localhost — не нужны
+  tasks:
+    - name: Assert site group is non-empty in inventory
+      assert:
+        that:
+          - groups['site'] is defined
+          - groups['site'] | length > 0
+        fail_msg: "Inventory file does not define group 'site'. Запустите с -i inventory/hosts.yml"
+
+- name: Generate SSH keys and trust remote host
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - ../roles/system/ssh_generate_local_keys
+    - ../roles/system/ssh_add_remote_host_to_known_hosts
