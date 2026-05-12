@@ -31,9 +31,9 @@ bantime.factor = 2
 bantime.formula = ban.Time * (1<<(ban.Count if ban.Count<20 else 20)) * banFactor
 bantime.overalljails = true
 ignorecommand =
-bantime = {{ banTime }} ; Минимальное время блокировки хоста
-findtime = {{ findTime }} ; Время подсчёта попыток для включения бана
-maxretry = {{ maxRetry }} ; Кол-во попыток за время findtime, после которых бан
+bantime = {{ ban_time }} ; Минимальное время блокировки хоста
+findtime = {{ find_time }} ; Время подсчёта попыток для включения бана
+maxretry = {{ max_retry }} ; Кол-во попыток за время findtime, после которых бан
 backend = systemd ; Для этого необходимо у всех отслеживаемых программ направить логи в systemd
 enabled = false ; По умолчанию все jails выключены
 
