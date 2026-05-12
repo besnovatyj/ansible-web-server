@@ -7,8 +7,5 @@
 ---
 - name: Testing server
   hosts: site
-  vars_files:
-    - ../secrets/secrets.vault
-    - ../group_vars/global.yml
   roles:
     - ../roles/3-tests

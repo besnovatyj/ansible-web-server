@@ -8,8 +8,5 @@
 ---
 - name: Basic server configuration
   hosts: site
-  vars_files:
-    - ../secrets/secrets.vault
-    - ../group_vars/global.yml
   roles:
     - ../roles/tests

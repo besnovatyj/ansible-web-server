@@ -14,9 +14,6 @@
   hosts: site
   gather_facts: yes
   remote_user: root
-  vars_files:
-    - ../secrets/secrets.vault
-    - ../group_vars/global.yml
   roles:
     - ../roles/web-server/redis
     - ../roles/web-server/memcached
@@ -27,8 +24,5 @@
 - name: Clean server
   hosts: site
   remote_user: root
-  vars_files:
-    - ../secrets/secrets.vault
-    - ../group_vars/global.yml
   roles:
     - ../roles/system/apt_clean

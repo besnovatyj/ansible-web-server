@@ -12,9 +12,6 @@
   hosts: site
   remote_user: root
   become: true
-  vars_files:
-    - ../secrets/secrets.vault
-    - ../group_vars/global.yml
   roles:
     - ../roles/system/user_sudo_add_new
     - ../roles/system/ssh_remote_root_keys

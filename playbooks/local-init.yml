@@ -8,9 +8,6 @@
 ---
 - name: Generate SSH keys
   hosts: localhost
-  vars_files:
-    - ../secrets/secrets.vault
-    - ../group_vars/global.yml
   roles:
     - ../roles/system/ssh_generate_local_keys
     - ../roles/system/ssh_add_remote_host_to_known_hosts
