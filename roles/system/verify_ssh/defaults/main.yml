@@ -1,0 +1,6 @@
+---
+# Переменные роли. Переопределяются при include_role + vars:
+# - verify_ssh_user — какого пользователя проверять (root, "{{ new_user }}", etc.)
+# - verify_ssh_key  — каким приватным ключом подключаться
+verify_ssh_user: root
+verify_ssh_key: "{{ emergency_key_path }}"

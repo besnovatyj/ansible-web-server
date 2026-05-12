@@ -1,0 +1,20 @@
+---
+- name: "verify_ssh: SSH login {{ verify_ssh_user }}@{{ target_host }}"
+  delegate_to: localhost
+  command: >
+    ssh -i {{ verify_ssh_key }}
+        -o BatchMode=yes
+        -o StrictHostKeyChecking=yes
+        -o ConnectTimeout=10
+        -p {{ target_ssh_port }}
+        {{ verify_ssh_user }}@{{ target_host }} "echo OK"
+  register: verify_ssh_result
+  changed_when: false
+  failed_when: "'OK' not in verify_ssh_result.stdout"
+
+- name: "verify_ssh: assert login succeeded for {{ verify_ssh_user }}"
+  assert:
+    that:
+      - verify_ssh_result.rc == 0
+    fail_msg: "SSH login as {{ verify_ssh_user }} via {{ verify_ssh_key }} FAILED!"
+    success_msg: "SSH login as {{ verify_ssh_user }} OK"
