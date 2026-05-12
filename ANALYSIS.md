@@ -282,6 +282,9 @@ paramiko или openssh) **не умеет** интерактивно вводи
 > сервер из контроллера. То есть **намерение твоё было верное, реализация через `wait_for_connection` его не
 > достигает.** Предлагаю заменить тесты в `roles/tests/tasks/*.yml` на такой подход.
 
+> ⚠️⚠️ ЗАМЕЧАНИЕ 2: StrictHostKeyChecking=no - проверка host key отключена, почему? Verify должен использовать:
+`-o StrictHostKeyChecking=yes`
+
 #### 3.1.5 `full-deploy` пропускает настройку безопасности
 
 **Файл**: `Makefile:19`
@@ -376,6 +379,10 @@ sticky bit. Любой процесс на сервере может модиф�
      > `certbot --nginx -d ... --non-interactive --agree-tos -m {{ certbot_email }}` — он сам отредактирует конфиги
      > Nginx и добавит редирект на HTTPS. Hook-задача после Certbot переключает шаблоны Nginx на "post-cert" версию
      > (или просто оставляем правки Certbot — оба варианта рабочие).
+
+> ⚠️⚠️ ЗАМЕЧАНИЕ 2: Перейти на полное управление SSL-конфигами из Ansible. Certbot только получает сертификаты:
+`certbot certonly --nginx` или даже: `certbot certonly --webroot`. А nginx templates уже сами подключают сертификаты И
+> делают redirect
 
 #### 3.2.4 AppArmor: опасные deny-правила
 
@@ -481,6 +488,15 @@ sticky bit. Любой процесс на сервере может модиф�
 > ⚠️⚠️ ЗАМЕЧАНИЕ 2: localhost на самом деле может отсутствовать, скорее всего, если я поменяю название хоста,
 > даже без Docker. Я же могу глобально на машине установить hostname? Или откуда этот localhost вообще берется? Из
 > MySQL? Разобраться!!!
+> ⚠️⚠️⚠️ ЗАМЕЧАНИЕ 3: localhost в MySQL не связан напрямую с Linux hostname, это отдельное значение host-column в
+> mysql.user
+> Вместо: `when: item != 'localhost'` сделать whitelist:
+> ```yaml
+>   keep_mysql_root_hosts:
+>     - localhost
+>     - 127.0.0.1
+> ```
+> А всё остальное удалять. Это намного безопаснее и понятнее.
 
 ---
 
@@ -982,7 +998,7 @@ Stage 0 (local)  ─→  Stage 1 (OS)  ─→  Stage 2 (access)  ─→  Stage 3
 **Assert-проверки:**
 
 - Все сервисы running: redis, memcached, mysql, nginx, php-fpm
-- Порты открыты: 80, 443
+- Порты открыты: 80, 443 !!! Но HTTPS появляется только после Stage 5a.
 - PHP-FPM socket существует
 
 > ⚠️ ЗАМЕЧАНИЕ: Одобрено. Но, не забыть про вынос в переменные web-доступных директорий для конфига хостов Nginx и
@@ -1162,6 +1178,9 @@ MySQL через "SSH tunnel" в HeidiSQL на `127.0.0.1:3306`.
      >
      > Альтернатива: оставить `secrets/secrets.vault` на месте, но включать в Makefile-целях через `-e @secrets.vault`.
      > Первый вариант чище, его и берём.
+
+
+
 
 ---
 
@@ -1362,6 +1381,16 @@ vault_redis_password: "..."
 После этого ни в одном плейбуке не нужно `vars_files: [../secrets/secrets.vault]` — Ansible сам найдёт файл в
 `group_vars/all/`, проверит что это vault, расшифрует через `vault_password_file` из `ansible.cfg` и загрузит
 переменные.
+
+> ⚠️ ЗАМЕЧАНИЕ: Технически работает. Но есть нюанс: любой inventory автоматически подхватит этот vault. Если потом
+> появится: dev prod staging, то secrets начнут течь между окружениями.
+> Лучше сразу
+> ```yaml
+>   inventory/
+>     prod/group_vars/all/
+>     dev/group_vars/all/
+> ```
+> Даже если сейчас один сервер.
 
 ### 5.4 Обновлённый Makefile
 
@@ -1592,7 +1621,7 @@ help:  ## Показать доступные команды
 
 > ⚠️ ЗАМЕЧАНИЕ: Переходим на генерацию и хранение ключей для текущего сервера в `ansible/secrets/ssh/`
 
-> 📝 ОТВЕТ AI: Принято. 
+> 📝 ОТВЕТ AI: Принято.
 > Конкретные правки уже учтены в разделе 5.3 (`local_ssh_keys_dir: "{{ playbook_dir }}/../secrets/ssh"`).
 
 ---
@@ -1611,3 +1640,249 @@ help:  ## Показать доступные команды
 - **Подробные комментарии** на русском языке — код читаемый и понятный
 - **Два типа SSH-ключей** — идея с аварийным ключом для root правильная (нужно только исправить деплой)
 - **Fail2ban с прогрессивным баном** — `bantime.factor=2` (экспоненциальное увеличение бана)
+
+---
+
+# 3 Анализ, внешний!
+
+Прочёл документ целиком. Нашёл нетривиальное количество противоречий и нескольких мест, где буквальное следование
+инструкции реально сломает деплой. Делю по тяжести.
+
+## Критические — сломают деплой
+
+**1. `vault_root_password` — мёртвая переменная, на которую завязан assert**
+
+В разделе 5.3 (vault.yml) явно сказано: `# vault_root_password больше не используется`. А в примере pre-flight assert из
+3.3.2 эта переменная всё ещё проверяется:
+
+```
+- vault_root_password is defined and vault_root_password | length > 0
+```
+
+Если перенесёшь пример в плейбук как есть — pre-flight на каждом stage будет падать сразу.
+
+**2. Рекурсивное определение в `group_vars/all/vault.yml`**
+
+В разделе 5.3:
+
+```yaml
+vault_ssh_key_passphrase: "{{ vault_ssh_key_passphrase }}"  # читается из secrets.vault
+```
+
+Это либо noop (если Ansible считает оба токена одной переменной), либо `RecursiveLoopError` (если попадёт под `hostvars`
+-резолв). Эту строку надо убрать вообще — она там лишняя, потому что `ssh_key_passphrase` уже мапится в `ssh.yml`:
+
+```yaml
+ssh_key_passphrase: "{{ vault_ssh_key_passphrase | default('') }}"
+```
+
+**3. `stage-0` и `stage-7` в Makefile запускаются без `-i inventory/hosts.yml`**
+
+```makefile
+stage-0:  ansible-playbook playbooks/stage-0-local-init.yml
+stage-7:  ansible-playbook playbooks/stage-7-key-hardening.yml
+```
+
+Но Stage 0 использует `target_host: "{{ hostvars[groups['site'][0]]['ansible_host'] }}"` для `known_hosts`, а Stage 7
+деплоит публичные ключи на сервер. Без инвентаря `groups['site']` пустой → `IndexError`. Надо добавить
+`-i inventory/hosts.yml` в обе цели.
+
+**4. Stage 4 / Stage 6 — `remote_user` сам с собой не дружит**
+
+- Раздел 5.1 и заголовки 5.2: «Stage 4: webserver (remote, **sudo user + become**)» и «Stage 6: verification (remote, *
+  *sudo user**)».
+- Ответ AI в 3.3.1 и 3.2.3 (про создание web_root): «Оставляем `remote_user: root` во всех плейбуках», «Запуск идёт от
+  root — этот плейбук остаётся `remote_user: root`».
+
+Решено оставить root, но в нескольких местах в той же главе по-прежнему написано sudo-user. Если возьмёшь заголовок за
+основу плейбука — Stage 4 не сможет ставить пакеты (sudo-юзер на тот момент уже создан, но пароля у него для `become`
+нет, ключ работает, однако нужен будет либо `NOPASSWD: ALL` в sudoers, либо ввод пароля → возвращаемся к той же
+проблеме, от которой бежали). Надо привести к единому: **везде root** + удалить упоминания «sudo user + become» из 5.1 и
+5.2.
+
+**5. Первое подключение к серверу нигде не описано**
+
+В `inventory/hosts.yml` стоит `site_ansible_key: "{{ ordinary_key_path }}"`. Stage 1 уже подключается **по ключу**. Но
+ключ кладётся на root только в Stage 2. Получается курица-яйцо: чтобы Ansible запустил Stage 1, ключ уже должен быть на
+сервере; чтобы ключ оказался на сервере, нужно прогнать Stage 2; но Stage 2 тоже подключается по ключу.
+
+В замечаниях есть фраза «root-пароль только при первом входе админа в сервер вручную», но в чек-листе миграции и в
+описании Stages нет пункта **«админ один раз вручную через `ssh-copy-id` или редактирование `authorized_keys`
+кладёт `ordinary_key_path.pub` на root»**. Без этого шага `make full-deploy` упадёт на самой первой задаче Stage 1. Надо
+добавить отдельный нулевой шаг в чек-лист и/или в README — «pre-stage-0: положить ordinary pubkey на root вручную».
+
+## Серьёзные — есть шанс сломать
+
+**6. Порядок fail2ban / post-check в Stage 3 расходится с собственной рекомендацией**
+
+Таблица Stage 3:
+
+```
+3. fail2ban
+4. ssh_remote_security (отключение пароля + hardening)
+5. post-check (SSH ещё жив?)
+```
+
+А ответ AI ниже: «fail2ban с `[sshd]` jail включаем **после** post-check SSH, не до — иначе во время exhaustive проверки
+SSH сам контроллер может попасть в бан».
+
+Если оставить таблицу как есть, риск: post-check шлёт несколько SSH-попыток подряд → fail2ban может временно забанить
+контроллер → последующие проверки/идемпотентные прогоны упадут с timeout. Поменять порядок: ssh_remote_security →
+post-check → fail2ban.
+
+**7. `ssh_key_passphrase` тянется из vault на всех stages**
+
+В ssh.yml:
+
+```yaml
+ssh_key_passphrase: "{{ vault_ssh_key_passphrase | default('') }}"
+```
+
+Это значит: если в `secrets.vault` уже лежит ненулевой `vault_ssh_key_passphrase` (а он там почти наверняка лежит —
+иначе зачем шифровать), то Stage 0 сгенерирует ключи **с passphrase**, и весь основной цикл сломается обратно в
+проблему, от которой ушли.
+
+Решение надо доформулировать явно: либо хранить `vault_ssh_key_passphrase` пустым до самого Stage 7 (тогда зачем он в
+vault?), либо ввести отдельную переменную `stage7_ssh_passphrase` и оставить `ssh_key_passphrase: ""` хардкодом на
+Stages 0–6. В текущей формулировке поведение зависит от содержимого vault — это бомба замедленного действия.
+
+**8. Новый jail `[yii2-auth]` не добавлен в `jails_enable_status`**
+
+В тексте 3.2.6 и в приоритете «высокий» №9 описано создание нового jail. В `security.yml` есть `php_fpm: false` (старый,
+выключенный), но `yii2_auth` в `jails_enable_status` отсутствует. Если шаблон `jail.local.j2` будет содержать блок
+`{% if jails_enable_status.yii2_auth %}` — он молча даст false (через `default(false)`) или упадёт с undefined. Надо
+добавить `yii2_auth: false` (или `true` после внедрения Monolog) в `jails_enable_status`.
+
+**9. Открытый вопрос пользователя в Stage 7 без ответа**
+
+> ⚠️⚠️ ЗАМЕЧАНИЕ 2: Можно ли здесь тогда бэкапить ключи без passphrase с указанием данного факта в имени бэкапа?
+
+AI на это не ответил. Это не баг кода, но это **незакрытое решение по архитектуре Stage 7**. Если будешь писать Stage
+7 — нужно сначала договориться по логике (бэкапить старые / удалять / куда / порядок «новые публичные на сервер →
+проверка → удалить старые публичные»).
+
+## Менее критичные
+
+**10. Stage 5b — «включает количество workers» vs «оставляем в disabled»**
+
+В таблице Stage 5b сказано «Включает количество workers по `queue_workers_count`», а ниже — «Юниты оставляем в
+disabled». Нужно переформулировать как «**настраивает шаблон** на `queue_workers_count` инстансов, но
+`state: stopped, enabled: no`».
+
+**11. `host_ip` (main.yml) и `target_host` (ssh.yml) — одно и то же выражение**
+
+Обе тянут `hostvars[groups['site'][0]]['ansible_host']`. Не баг, но дублирование — при смене инвентаря синхронизировать
+два места.
+
+**12. `php-version` → `php_version` в роли nginx**
+
+Чек-лист пункт 2 говорит обновить ссылки в ролях. Но конкретно в `nginx/templates/site.tmp.j2` есть
+`php{{ php-version }}-fpm.sock` (упомянуто в ответе AI на 3.4). Стоит добавить отдельным буллетом в пункт 2: «не забыть
+про `site.tmp.j2`».
+
+**13. Pre-flight assert в Stage 0**
+
+Stage 0 запускается на localhost без подключения к серверу. Если pre-flight assert по vault туда попадёт, он расшифрует
+vault на localhost — это нормально, vault-пароль локально доступен. Но проверка `vault_mysql_root_password` на Stage 0
+не имеет смысла. Надо явно прописать: «список assert-переменных подбирается per-stage» (это и так в ответе на 3.3.2
+написано, но в чек-листе пункт 15 не упоминает per-stage списки — легко проглядеть).
+
+## Вердикт
+
+Документ концептуально согласован — направление правильное. Но если буквально брать его как руководство к исполнению,
+упадёт минимум в трёх местах:
+
+1. На первом же `make full-deploy` — Stage 1 не подключится к серверу (пункт 5).
+2. При запуске pre-flight assert по шаблону из 3.3.2 (пункт 1).
+3. На `make stage-0` или `stage-7` без модификации Makefile (пункт 3).
+
+Если поправить эти три и определиться с пунктом 7 (`ssh_key_passphrase`) **до начала работы
+** — дальше всё реализуемо. Остальное — косметика и шероховатости, на которые можно нарваться поэтапно. Рекомендую перед стартом миграции внести правки прямо в этот документ (чтобы он не врал сам себе), а потом уже идти по чек-листу.
+
+---
+
+Все шаги
+
+## Stage 0: local-init (localhost)
+
+**Цель**: Подготовить локальную машину для работы с сервером.
+
+- Генерация SSH-ключей (ordinary + emergency) **без passphrase**
+- Добавление ECDSA-отпечатка сервера в known_hosts
+
+## Stage 1: server-base (remote, root)
+
+**Цель**: Базовая настройка ОС. Чистая конфигурация без инструментов безопасности.
+
+- Обновление security-патчей
+- Локали, hostname, timezone
+- Создание swap (размер через переменную)
+- Лимиты journald
+
+## Stage 2: server-access (remote, root)
+
+**Цель**: Настройка пользовательского доступа. **Без отключения пароля!**
+
+- Создание sudo-пользователя
+- Деплой **аварийного** ключа на root
+- Деплой обычного ключа на sudo-пользователя
+- Логирование SSH в journald
+- Проверка подключения по ключу для root И sudo-пользователя
+
+## Stage 3: server-security (remote, root)
+
+**Цель**: Hardening. Запускать **только после** успешного Stage 2.
+
+- assert: SSH-ключи работают (повторная проверка)
+- Фаервол
+- IPS (fail2ban sshd jail включать **после** проверки ключей)
+- Отключение пароля, hardening ciphers/MACs/Kex
+- Проверка что SSH по ключу всё ещё работает после hardening
+- MAC-профили в режиме **complain** сначала
+
+## Stage 4: webserver (remote, sudo user + become)
+
+**Цель**: Установка LEMP-стека. **Использует sudo-пользователя** вместо root.
+
+- Redis **с паролем** (`requirepass`)
+- Memcached
+- MySQL (install + secure + setup)
+- Nginx (3 server block)
+- PHP 8.4 + модули + FPM pool
+- Очистка
+
+## Stage 5: webserver-extras (remote, root) — переработан
+
+**Stage 5a: certbot** (`stage-5a-certbot.yml`)
+
+Цель: получить SSL-сертификаты Let's Encrypt и переписать конфиг Nginx на HTTPS.
+
+- Устанавливает certbot + python3-certbot-nginx
+- Получает сертификаты для всех доменов из `nginx_sites[*].server_name
+- Запускает `certbot --nginx --non-interactive --agree-tos -m {{ certbot_email }} -d ...` — Certbot сам редактирует
+  Nginx
+- Регистрирует cron для `certbot renew`
+
+**Stage 5b: queue-workers** (`stage-5b-queue.yml`)
+
+Цель: установить systemd-юниты для Yii2 queue workers.
+
+- Копирует `yii-queue@.service`
+- Включает количество workers по `queue_workers_count`
+- Добавляет ресурсные лимиты (MemoryMax, CPUQuota)
+
+**Stage 5c: data_transfer** (`stage-5c-data-transfer.yml`) — **резерв на будущее, не используется**
+
+## Stage 6: verification (remote, sudo user)
+
+**Цель**: Комплексная проверка всего сервера.
+
+## Stage 7: key-hardening (опционально)
+
+**Цель**: Миграция SSH-ключей на passphrase. Запускать **только после** полной настройки.
+
+
+
+
+
+
