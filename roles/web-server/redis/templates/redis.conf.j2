@@ -1,6 +1,7 @@
 bind 127.0.0.1
 protected-mode yes
 port 6379
+requirepass {{ redis_password }}
 maxmemory 128mb
 maxmemory-policy allkeys-lru
 # fail2ban ищет логи в systemd (Если параметр logfile не указан или установлен в "", Redis будет выводить логи в stdout.)

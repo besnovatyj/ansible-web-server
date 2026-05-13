@@ -12,7 +12,7 @@
         that:
           - vault_mysql_root_password is defined and vault_mysql_root_password | length > 0
           - vault_mysql_db_user_password is defined and vault_mysql_db_user_password | length > 0
-          # vault_redis_password добавится в фазе H1
+          - vault_redis_password is defined and vault_redis_password | length > 0
         fail_msg: |
           Required vault variables are missing.
           Проверьте что group_vars/all/secrets.vault расшифровывается и содержит ключи.

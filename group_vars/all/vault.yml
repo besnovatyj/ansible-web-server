@@ -15,4 +15,4 @@
 site_ansible_password: "{{ vault_root_password }}"
 mysql_root_password_from_vault: "{{ vault_mysql_root_password }}"
 mysql_db_user_password_from_vault: "{{ vault_mysql_db_user_password }}"
-redis_password_from_vault: "{{ vault_redis_password | default('') }}"
+redis_password: "{{ vault_redis_password }}"
