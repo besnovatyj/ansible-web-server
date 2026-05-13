@@ -1,27 +1,31 @@
 ---
-# Устанавливает Certbot, создаёт сертификаты и настраивает cron для renewal
-# TODO: Тестируйте: `curl -I http://est-domain.com` должен redirect на HTTPS.
-- name: Установка Certbot через Snap
-  snap:
-    name: certbot
-    classic: yes
+-   name: Install certbot + nginx plugin
+    apt:
+      name:
+        - certbot
+        - python3-certbot-nginx
+      state: present
+      update_cache: yes
 
-- name: Симлинк Certbot
-  file:
-    src: /snap/bin/certbot
-    dest: /usr/bin/certbot
-    state: link
+-   name: Build list of -d arguments from nginx_sites
+    set_fact:
+      certbot_domains_args: >-
+        {{ nginx_sites | map(attribute='server_name')
+                       | map('split', ' ')
+                       | flatten
+                       | map('regex_replace', '^(.+)$', '-d \1')
+                       | join(' ') }}
 
-- name: Установка плагина Certbot для Nginx
-  command: snap install certbot-nginx  # Или apt: python3-certbot-nginx, но snap предпочтительнее
+-   name: Request Let's Encrypt certificates
+    command: >
+      certbot --nginx --non-interactive --agree-tos
+              -m {{ certbot_email }}
+              {{ certbot_domains_args }}
+    args:
+      creates: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
 
-# TODO: Добавьте условие: если сертификат существует (`/etc/letsencrypt/live/{{ domain }}/fullchain.pem`), то skip (используйте stat-модуль)
-- name: Получение SSL-сертификата (интерактивно, адаптируй)
-  command: certbot --nginx -d {{ domain_name }} --non-interactive --agree-tos --email {{ certbot_email }}
-
-- name: Настройка автообновления сертификатов
-  cron:
-    name: Certbot renewal
-    minute: "0"
-    hour: "3"
-    job: "/usr/bin/certbot renew --quiet"
+-   name: Ensure certbot renew timer is enabled
+    systemd:
+      name: certbot.timer
+      enabled: yes
+      state: started

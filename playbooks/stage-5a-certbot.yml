@@ -1,0 +1,28 @@
+##########################################################
+# Stage 5a: Let's Encrypt сертификаты
+# Запускать после Stage 4 и настройки DNS.
+##########################################################
+---
+-   name: Pre-flight checks for stage 5a
+    hosts: site
+    gather_facts: false
+    tasks:
+      -   name: Resolve {{ domain_name }} (DNS check)
+          delegate_to: localhost
+          command: dig +short {{ domain_name }}
+          register: dns_check
+          changed_when: false
+
+      -   name: Assert DNS resolves to server IP
+          assert:
+            that:
+              - dns_check.stdout | trim == host_ip
+            fail_msg: |
+              DNS для {{ domain_name }} указывает на {{ dns_check.stdout | trim }},
+              а сервер — {{ host_ip }}. Поправь DNS и повтори.
+
+-   name: Stage 5a - Certbot
+    hosts: site
+    remote_user: root
+    roles:
+      - ../roles/web-server/certbot
