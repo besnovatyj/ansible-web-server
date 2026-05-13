@@ -83,6 +83,14 @@
     directory_mode: '0755'
   notify: Restart PHP-FPM
 
+- name: Copy PHP configuration files to cli/conf.d
+  ansible.builtin.copy:
+    src: files/conf.d/
+    dest: /etc/php/{{ php_version }}/cli/conf.d/
+    owner: root
+    group: root
+    mode: '0644'
+
 - name: Copy and process PHP configuration templates from templates/conf.d
   ansible.builtin.template:
     src: "{{ item }}"
