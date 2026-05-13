@@ -22,3 +22,15 @@
   with_items:
     - "yii-queue@1"
     - "yii-queue@2"
+
+-   name: Reload systemd
+    systemd:
+      daemon_reload: yes
+
+-   name: Ensure units are stopped and disabled (will be enabled manually after first deploy)
+    systemd:
+      name: "yii-queue@{{ item }}"
+      state: stopped
+      enabled: no
+    loop: "{{ range(1, queue_workers_count + 1) | list }}"
+    ignore_errors: true  # юнит может ещё не существовать на первой итерации
