@@ -33,7 +33,6 @@ target_host: "{{ hostvars[groups['site'][0]]['ansible_host'] }}"
 
 ############### Подключение Ansible
 site_ansible_user: root
-site_ansible_password: "{{ vault_root_password }}" # Сначала пароль, потом копирование ключей, потом уже без пароля. Чтобы автоматизировать копирование ключей, нужен пароль.
 
 ############### Новый sudo пользователь вместо root
 new_user: "bes" # Укажите имя нового пользователя
