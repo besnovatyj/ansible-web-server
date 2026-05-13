@@ -26,6 +26,13 @@ jails_enable_status:
   sendmail_auth: false
   sendmail_reject: false
   # Добавленные
-  php_fpm: false # Для защиты от брутфорса PHP-приложений. Логирование см. ANALYSIS 3.2.6
   redis_auth: false # Слушает только localhost
+  # Ниже два правила одного и того же. php_fpm - устаревшее, оставлено на всякий случай,
+  # удаляем после полной настройки или описания процесса настройки для yii2_auth
+  php_fpm: false # Для защиты от брутфорса PHP-приложений. Логирование см. ANALYSIS 3.2.6
   yii2_auth: false # Включится после внедрения Monolog→SyslogHandler в Yii2. См. ANALYSIS 3.2.6
+
+
+
+
+

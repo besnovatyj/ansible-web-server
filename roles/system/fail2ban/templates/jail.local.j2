@@ -86,21 +86,23 @@ enabled = {{ jails_enable_status.recidive | bool | lower }}
 # Добавленные
 #
 
-[ php-fpm ]
-# Для защиты от брутфорса PHP-приложений. Для этого настройте PHP-FPM на логирование ошибок авторизации в отдельный файл.
-enabled = {{ jails_enable_status['php_fpm'] | bool | lower }}
-port = http,https
-filter = php-fpm
-logpath = /var/log/php{{ php_version }}-fpm.log
-backend = polling ; т.к. по умолчанию исп-я systemd, а здесь исп-я файл
-
 [ redis-auth ]
 # Убедитесь, что Redis пишет логи в systemd.
 enabled = {{ jails_enable_status['redis_auth'] | bool | lower }}
 port = 6379
 filter = redis-auth
 
+[ php-fpm ]
+# Для защиты от брутфорса PHP-приложений. Для этого настройте PHP-FPM на логирование ошибок авторизации в отдельный файл.
+# TODO - устаревшее, оставлено до полного перехода на yii2-auth
+enabled = {{ jails_enable_status['php_fpm'] | bool | lower }}
+port = http,https
+filter = php-fpm
+logpath = /var/log/php{{ php_version }}-fpm.log
+backend = polling ; т.к. по умолчанию исп-я systemd, а здесь исп-я файл
+
 # Файл фильтра `roles/system/fail2ban/files/filter.d/yii2-auth.conf` создаётся отдельно, когда формат логов Monolog будет известен.
+# Monolog yii2 настраиваем на запись логов ошибок аутентификации в syslog
 [ yii2-auth ]
 enabled = {{ jails_enable_status.yii2_auth | bool | lower }}
 backend = systemd

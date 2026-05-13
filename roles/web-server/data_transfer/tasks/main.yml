@@ -1,7 +1,7 @@
 ---
-- name: Sync site files # https://stackoverflow.com/a/27995384
+- name: Sync site files # https://stackoverflow.com/a/27995384 (обертка над `rsync`)
   ansible.posix.synchronize:
-    src: /mnt/a/openserver/domains/TODO/scripts/ansible/roles/data_transfer/data
+    src: "FULL_ABSOLUTE_PATH??"
     dest: {{ web_root }}/{{ domain_name }}/
     delete: yes # Удалит файлы на сервере, которых нет локально (опционально)
     # checksum=true # По-умолчанию rsync использует для сравнения "mod-time" и "file size", если нужно сравнивать по содержимому, то включить эту опцию (checksum=true)

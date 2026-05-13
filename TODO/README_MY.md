@@ -76,21 +76,17 @@ NB: fail2ban версии 1.0.2 предустановлен в `ubuntu server 2
 ### Установка Ansible
 
 ```bash
-sudo apt update
-```
-
-```bash
-sudo apt install ansible
+make init-ansible
 ```
 
 Проверка синтаксиса: Перед запуском playbook убедитесь, что синтаксис корректен:
 
 ```bash
-ansible-playbook playbook.yml --syntax-check
+make syntax-check
 ```
 
 Тестирование: Запустите playbook с флагом --check для сухого прогона:
 
 ```bash
-ansible-playbook playbook.yml --check
+ansible-playbook -i inventory/hosts.yml playbook.yml --check
 ```
