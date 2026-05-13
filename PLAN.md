@@ -100,20 +100,20 @@ Stage 1 нужно один раз вручную положить `ordinary_pub
 
 ```yaml
 ---
-- name: Ensure .ssh directory exists for target user
-  file:
-    path: "/root/.ssh"
-    state: directory
-    mode: '0700'
-    owner: "root"
-    group: "root"
+-   name: Ensure .ssh directory exists for target user
+    file:
+        path: "/root/.ssh"
+        state: directory
+        mode: '0700'
+        owner: "root"
+        group: "root"
 
-- name: Copy public key to root (for emergency access)
-  authorized_key:
-    user: root
-    key: "{{ lookup('file', emergency_pubkey_path) }}"
-    state: present
-    manage_dir: yes
+-   name: Copy public key to root (for emergency access)
+    authorized_key:
+        user: root
+        key: "{{ lookup('file', emergency_pubkey_path) }}"
+        state: present
+        manage_dir: yes
 ```
 
 **Коммит:** `fix(ansible): deploy emergency pubkey to root instead of ordinary`
@@ -128,32 +128,32 @@ locally connection plugin, а не SSH до сервера (см. ANALYSIS 3.1.4
 ДО (часть с `wait_for_connection`):
 
 ```yaml
-- name: Test SSH connection as new user
-  wait_for_connection:
-    delay: 5
-    timeout: 30
-  vars:
-    ansible_user: "{{ new_user }}"
-  delegate_to: localhost
-  run_once: true
-  changed_when: false
+-   name: Test SSH connection as new user
+    wait_for_connection:
+        delay: 5
+        timeout: 30
+    vars:
+        ansible_user: "{{ new_user }}"
+    delegate_to: localhost
+    run_once: true
+    changed_when: false
 ```
 
 ПОСЛЕ:
 
 ```yaml
-- name: Verify SSH key login for new user
-  delegate_to: localhost
-  command: >
-    ssh -i {{ ordinary_key_path }}
-        -o BatchMode=yes
-        -o StrictHostKeyChecking=yes
-        -o ConnectTimeout=10
-        -p {{ target_ssh_port }}
-        {{ new_user }}@{{ target_host }} "echo OK"
-  register: ssh_test_new_user
-  changed_when: false
-  failed_when: "'OK' not in ssh_test_new_user.stdout"
+-   name: Verify SSH key login for new user
+    delegate_to: localhost
+    command: >
+        ssh -i {{ ordinary_key_path }}
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+            -o ConnectTimeout=10
+            -p {{ target_ssh_port }}
+            {{ new_user }}@{{ target_host }} "echo OK"
+    register: ssh_test_new_user
+    changed_when: false
+    failed_when: "'OK' not in ssh_test_new_user.stdout"
 ```
 
 > Уже есть похожий блок `Verify SSH key login for {{ verify_ssh_user }}` — он использует
@@ -165,32 +165,32 @@ locally connection plugin, а не SSH до сервера (см. ANALYSIS 3.1.4
 ДО:
 
 ```yaml
-- name: Test SSH connection as root
-  wait_for_connection:
-    delay: 5
-    timeout: 30
-  vars:
-    ansible_user: "root"
-  delegate_to: localhost
-  run_once: true
-  changed_when: false
+-   name: Test SSH connection as root
+    wait_for_connection:
+        delay: 5
+        timeout: 30
+    vars:
+        ansible_user: "root"
+    delegate_to: localhost
+    run_once: true
+    changed_when: false
 ```
 
 ПОСЛЕ:
 
 ```yaml
-- name: Verify SSH key login for root (emergency key)
-  delegate_to: localhost
-  command: >
-    ssh -i {{ emergency_key_path }}
-        -o BatchMode=yes
-        -o StrictHostKeyChecking=yes
-        -o ConnectTimeout=10
-        -p {{ target_ssh_port }}
-        root@{{ target_host }} "echo OK"
-  register: ssh_test_root
-  changed_when: false
-  failed_when: "'OK' not in ssh_test_root.stdout"
+-   name: Verify SSH key login for root (emergency key)
+    delegate_to: localhost
+    command: >
+        ssh -i {{ emergency_key_path }}
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+            -o ConnectTimeout=10
+            -p {{ target_ssh_port }}
+            root@{{ target_host }} "echo OK"
+    register: ssh_test_root
+    changed_when: false
+    failed_when: "'OK' not in ssh_test_root.stdout"
 ```
 
 **Замечание про `StrictHostKeyChecking=yes`:** требует, чтобы Stage 0 уже добавил отпечаток
@@ -218,13 +218,13 @@ mysql-переменными. Это переменная конфигураци
 mysql_db_name: mysql_db_name
 mysql_db_user: mysql_db_user
 mysql_db_user_password: "{{ vault_mysql_db_user_password }}"
-mysql_root_password : "{{ vault_mysql_root_password }}"
+mysql_root_password: "{{ vault_mysql_root_password }}"
 
 # Список host-значений в mysql.user, которые root@<host> НЕ удаляются при secure_installation.
 # Всё остальное (включая '%' и FQDN сервера) удаляется.
 keep_mysql_root_hosts:
-  - localhost
-  - 127.0.0.1
+    - localhost
+    - 127.0.0.1
 ```
 
 ### B3.2. Переписать цикл удаления root-аккаунтов
@@ -232,53 +232,54 @@ keep_mysql_root_hosts:
 ДО (последняя задача в `mysql_secure_installation.yml`):
 
 ```yaml
-- name: Удаление дополнительных root-аккаунтов для запрета удалённого доступа
-  mysql_user:
-    name: root
-    host: "{{ item }}"
-    state: absent
-    login_user: root
-    login_password: "{{ mysql_root_password }}"
-    login_unix_socket: /var/run/mysqld/mysqld.sock
-  loop:
-    - "::1"
-    - "127.0.0.1"
-    - "{{ ansible_fqdn | default('') }}"
-    - "{{ inventory_hostname }}"
-    - "{{ ansible_hostname }}"
-    - "%"
-  no_log: true
-  when: item != 'localhost'
+-   name: Удаление дополнительных root-аккаунтов для запрета удалённого доступа
+    mysql_user:
+        name: root
+        host: "{{ item }}"
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+    loop:
+        - "::1"
+        - "127.0.0.1"
+        - "{{ ansible_fqdn | default('') }}"
+        - "{{ inventory_hostname }}"
+        - "{{ ansible_hostname }}"
+        - "%"
+    no_log: true
+    when: item != 'localhost'
 ```
 
 ПОСЛЕ:
 
 ```yaml
-- name: Получить список всех root@host из mysql.user
-  community.mysql.mysql_query:
-    login_user: root
-    login_password: "{{ mysql_root_password }}"
-    login_unix_socket: /var/run/mysqld/mysqld.sock
-    query: "SELECT Host FROM mysql.user WHERE User = 'root'"
-  register: mysql_root_hosts
-  no_log: true
+-   name: Получить список всех root@host из mysql.user
+    community.mysql.mysql_query:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        query: "SELECT Host FROM mysql.user WHERE User = 'root'"
+    register: mysql_root_hosts
+    no_log: true
 
-- name: Удалить все root-аккаунты, не входящие в keep_mysql_root_hosts
-  mysql_user:
-    name: root
-    host: "{{ item.Host }}"
-    state: absent
-    login_user: root
-    login_password: "{{ mysql_root_password }}"
-    login_unix_socket: /var/run/mysqld/mysqld.sock
-  loop: "{{ mysql_root_hosts.query_result[0] }}"
-  loop_control:
-    label: "root@{{ item.Host }}"
-  when: item.Host not in keep_mysql_root_hosts
-  no_log: true
+-   name: Удалить все root-аккаунты, не входящие в keep_mysql_root_hosts
+    mysql_user:
+        name: root
+        host: "{{ item.Host }}"
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+    loop: "{{ mysql_root_hosts.query_result[0] }}"
+    loop_control:
+        label: "root@{{ item.Host }}"
+    when: item.Host not in keep_mysql_root_hosts
+    no_log: true
 ```
 
 **Что изменилось:**
+
 - Раньше: пробегаем фиксированный список из 6 значений и удаляем те, что не `'localhost'`.
 - Теперь: смотрим что **реально** есть в `mysql.user`, и удаляем всё кроме whitelist.
 - Преимущество: если MySQL сам создал какой-нибудь `root@<нестандартный_hostname>` — мы его
@@ -292,6 +293,7 @@ keep_mysql_root_hosts:
 ## B4. AppArmor → complain mode + убрать `deny /etc/passwd r`
 
 **Файлы:**
+
 - `ansible/roles/system/app_armor/tasks/main.yml`
 - `ansible/roles/system/app_armor/templates/usr.sbin.nginx.j2`
 - `ansible/roles/system/app_armor/templates/usr.sbin.php-fpm.j2`
@@ -306,19 +308,19 @@ keep_mysql_root_hosts:
 ДО:
 
 ```yaml
-- name: Enforce Nginx profile
-  command: aa-enforce /etc/apparmor.d/usr.sbin.nginx
-  ignore_errors: true
-  notify: Reload AppArmor
+-   name: Enforce Nginx profile
+    command: aa-enforce /etc/apparmor.d/usr.sbin.nginx
+    ignore_errors: true
+    notify: Reload AppArmor
 ```
 
 ПОСЛЕ:
 
 ```yaml
-- name: Set Nginx profile to complain mode
-  command: aa-complain /etc/apparmor.d/usr.sbin.nginx
-  changed_when: false
-  notify: Reload AppArmor
+-   name: Set Nginx profile to complain mode
+    command: aa-complain /etc/apparmor.d/usr.sbin.nginx
+    changed_when: false
+    notify: Reload AppArmor
 ```
 
 Аналогично для php-fpm, mysqld, redis-server, fail2ban-server. Заменить заголовки задач:
@@ -418,9 +420,11 @@ new_user: "bes" # Укажите имя нового пользователя
 ```
 
 **Что выкинули относительно `global.yml`:**
+
 - `target_user` — нигде не использовалась.
-- `site_ansible_password` — Ansible работает только по ключу, пароль больше не нужен. 
-   !!!НЕПРАВДА!!! Сначала пароль, потом копирование ключей, потом уже без пароля. Чтобы автоматизировать копирование ключей, нужен пароль. 
+- `site_ansible_password` — Ansible работает только по ключу, пароль больше не нужен.
+  !!!НЕПРАВДА!!! Сначала пароль, потом копирование ключей, потом уже без пароля. Чтобы автоматизировать копирование
+  ключей, нужен пароль.
 
 > `local_ssh_keys_dir` пока остаётся в `~/.ssh/` — переедем на `secrets/ssh/` в фазе E.
 
@@ -444,27 +448,28 @@ maxRetry: 5
 # Если сервис имеет доступ снаружи сервера, тогда защищаем,
 # иначе просто закрываем доступ извне на уровне фаервола.
 jailsEnableStatus:
-  # Предустановленные
-  sshd: true
-  nginx-http-auth: true
-  nginx-limit-req: false # Чтобы включить, сначала прочитай описание в файле конфига
-  nginx-botsearch: true
-  nginx-bad-request: true
-  nginx-forbidden: true
-  php-url-fopen: true
-  vsftpd: false # Не устанавливаем. Зачем, если есть WinSCP
-  mysqld-auth: false # Слушает только localhost
-  traefik-auth: false # Сначала настрой его. :)
-  recidive: true
-  sendmail-auth: false
-  sendmail-reject: false
-  # Добавленные
-  php-fpm: false # Для защиты от брутфорса PHP-приложений. Логирование см. ANALYSIS 3.2.6
-  redis-auth: false # Слушает только localhost
-  yii2-auth: false # Включится после внедрения Monolog→SyslogHandler в Yii2. См. ANALYSIS 3.2.6
+    # Предустановленные
+    sshd: true
+    nginx-http-auth: true
+    nginx-limit-req: false # Чтобы включить, сначала прочитай описание в файле конфига
+    nginx-botsearch: true
+    nginx-bad-request: true
+    nginx-forbidden: true
+    php-url-fopen: true
+    vsftpd: false # Не устанавливаем. Зачем, если есть WinSCP
+    mysqld-auth: false # Слушает только localhost
+    traefik-auth: false # Сначала настрой его. :)
+    recidive: true
+    sendmail-auth: false
+    sendmail-reject: false
+    # Добавленные
+    php-fpm: false # Для защиты от брутфорса PHP-приложений. Логирование см. ANALYSIS 3.2.6
+    redis-auth: false # Слушает только localhost
+    yii2-auth: false # Включится после внедрения Monolog→SyslogHandler в Yii2. См. ANALYSIS 3.2.6
 ```
 
 **Что нового:**
+
 - `yii2-auth: false` — добавлено заранее, чтобы шаблон `jail.local.j2` не падал с
   undefined переменной (см. внешний обзор п. 8 в ANALYSIS).
 
@@ -483,27 +488,27 @@ jailsEnableStatus:
 php-version: 8.4 # Стабильная версия из ubuntu.com для Ubuntu 24.04.3 (Noble Numbat)
 
 php_modules: [
-  "php{{ php-version }}-fpm",
-  "php{{ php-version }}-cli",
-  "php{{ php-version }}-common", # Содержит calendar
-  "php{{ php-version }}-mysqlnd",
-  "php{{ php-version }}-mysql", # Содержит pdo_mysql
-  "php{{ php-version }}-redis",
-  "php{{ php-version }}-zip",
-  "php{{ php-version }}-gd",
-  "php{{ php-version }}-mbstring",
-  "php{{ php-version }}-curl",
-  "php{{ php-version }}-xml", # Содержит simplexml, dom
-  "php{{ php-version }}-apcu", # 5.1.24; для кэширования; включить apcu.enable=1 в conf.d/apcu.ini
-  "php{{ php-version }}-intl", # TODO проверить что работает (должны работать форматтеры Yii2)
-  "php{{ php-version }}-bcmath",
-  "php{{ php-version }}-fileinfo",
-  "php{{ php-version }}-pdo",
-  "php{{ php-version }}-opcache", # Включить opcache.enable=1 в conf.d/opcache.ini
-  "php{{ php-version }}-exif",
-  "php{{ php-version }}-imagick",
-  "php{{ php-version }}-memcached",
-#  "php{{ php-version }}-pcntl" # Только CLI, в FPM не работает
+    "php{{ php-version }}-fpm",
+    "php{{ php-version }}-cli",
+    "php{{ php-version }}-common", # Содержит calendar
+    "php{{ php-version }}-mysqlnd",
+    "php{{ php-version }}-mysql", # Содержит pdo_mysql
+    "php{{ php-version }}-redis",
+    "php{{ php-version }}-zip",
+    "php{{ php-version }}-gd",
+    "php{{ php-version }}-mbstring",
+    "php{{ php-version }}-curl",
+    "php{{ php-version }}-xml", # Содержит simplexml, dom
+    "php{{ php-version }}-apcu", # 5.1.24; для кэширования; включить apcu.enable=1 в conf.d/apcu.ini
+    "php{{ php-version }}-intl", # TODO проверить что работает (должны работать форматтеры Yii2)
+    "php{{ php-version }}-bcmath",
+    "php{{ php-version }}-fileinfo",
+    "php{{ php-version }}-pdo",
+    "php{{ php-version }}-opcache", # Включить opcache.enable=1 в conf.d/opcache.ini
+    "php{{ php-version }}-exif",
+    "php{{ php-version }}-imagick",
+    "php{{ php-version }}-memcached",
+    #  "php{{ php-version }}-pcntl" # Только CLI, в FPM не работает
 ]
 
 ##########################################################
@@ -517,8 +522,8 @@ mysql_root_password: "{{ vault_mysql_root_password }}"
 
 # Список host-значений в mysql.user, которые root@<host> НЕ удаляются при secure_installation.
 keep_mysql_root_hosts:
-  - localhost
-  - 127.0.0.1
+    - localhost
+    - 127.0.0.1
 
 ##########################################################
 # CERTBOT
@@ -595,11 +600,12 @@ ansible-playbook -i inventory/hosts.yml playbooks/remote-base.yml --check
 
 ```yaml
 vars_files:
-  - ../secrets/secrets.vault
-  - ../group_vars/global.yml
+    - ../secrets/secrets.vault
+    - ../group_vars/global.yml
 ```
 
 Файлы:
+
 - `ansible/playbooks/local-init.yml`
 - `ansible/playbooks/remote-base.yml`
 - `ansible/playbooks/remote-security.yml`
@@ -609,28 +615,28 @@ vars_files:
 Пример для `remote-base.yml` — ДО:
 
 ```yaml
-- name: Basic server configuration
-  hosts: site
-  remote_user: root
-  become: true
-  vars_files:
-    - ../secrets/secrets.vault
-    - ../group_vars/global.yml
-  roles:
-    - ../roles/system/apt_update
-    ...
+-   name: Basic server configuration
+    hosts: site
+    remote_user: root
+    become: true
+    vars_files:
+        - ../secrets/secrets.vault
+        - ../group_vars/global.yml
+    roles:
+        - ../roles/system/apt_update
+        ...
 ```
 
 ПОСЛЕ:
 
 ```yaml
-- name: Basic server configuration
-  hosts: site
-  remote_user: root
-  become: true
-  roles:
-    - ../roles/system/apt_update
-    ...
+-   name: Basic server configuration
+    hosts: site
+    remote_user: root
+    become: true
+    roles:
+        - ../roles/system/apt_update
+        ...
 ```
 
 **Коммит:** `chore(ansible): drop vars_files from playbooks (group_vars/all auto-loads)`
@@ -654,6 +660,7 @@ git rm ansible/group_vars/global.yml
 `undefined variable`.
 
 **Утилита поиска:** перед каждой правкой
+
 ```bash
 grep -RIn "PATTERN" ansible/ \
     --include="*.yml" --include="*.yaml" --include="*.j2" --include="*.cfg"
@@ -671,6 +678,7 @@ grep -RIn "php-version" ansible/
 ```
 
 Типичные места:
+
 - `ansible/group_vars/all/webserver.yml` (определение)
 - `ansible/roles/web-server/php/tasks/main.yml` (использование в путях
   `/etc/php/{{ php-version }}/...`)
@@ -686,11 +694,13 @@ grep -RIn "php-version" ansible/
 В `group_vars/all/webserver.yml`:
 
 ДО:
+
 ```yaml
 php-version: 8.4
 ```
 
 ПОСЛЕ:
+
 ```yaml
 php_version: "8.4"  # обязательно строкой, иначе YAML парсит как float и теряет ".0"
 ```
@@ -700,21 +710,23 @@ php_version: "8.4"  # обязательно строкой, иначе YAML п�
 Пример для одной строки в `php/tasks/main.yml`:
 
 ДО:
+
 ```yaml
-- name: Ensure required PHP modules are enabled (if needed)
-  command: phpenmod {{ item }}
-  ...
-  args:
-    creates: "/etc/php/{{ php-version }}/mods-available/{{ item }}.ini"
+-   name: Ensure required PHP modules are enabled (if needed)
+    command: phpenmod {{ item }}
+    ...
+    args:
+        creates: "/etc/php/{{ php-version }}/mods-available/{{ item }}.ini"
 ```
 
 ПОСЛЕ:
+
 ```yaml
-- name: Ensure required PHP modules are enabled (if needed)
-  command: phpenmod {{ item }}
-  ...
-  args:
-    creates: "/etc/php/{{ php_version }}/mods-available/{{ item }}.ini"
+-   name: Ensure required PHP modules are enabled (if needed)
+    command: phpenmod {{ item }}
+    ...
+    args:
+        creates: "/etc/php/{{ php_version }}/mods-available/{{ item }}.ini"
 ```
 
 ### D1.3. Проверка после замены
@@ -730,11 +742,13 @@ ansible-playbook playbooks/remote-webserver.yml --syntax-check
 ## D2. `DOMAIN_NAME` → `domain_name`
 
 ### D2.1. Поиск
+
 ```bash
 grep -RIn "DOMAIN_NAME" ansible/
 ```
 
 Места (примерно):
+
 - `ansible/group_vars/all/main.yml` (определение)
 - `ansible/group_vars/all/ssh.yml` (использование в `ordinary_key_path`,
   `emergency_key_path`)
@@ -747,11 +761,13 @@ grep -RIn "DOMAIN_NAME" ansible/
 В `group_vars/all/main.yml`:
 
 ДО:
+
 ```yaml
 DOMAIN_NAME: domain.zone
 ```
 
 ПОСЛЕ:
+
 ```yaml
 domain_name: domain.zone
 ```
@@ -761,12 +777,14 @@ domain_name: domain.zone
 Пример для nginx-template (одна из многих строк):
 
 ДО:
+
 ```nginx
 server_name {{ DOMAIN_NAME }} www.{{ DOMAIN_NAME }};
 root        {{ web_root }}/{{ DOMAIN_NAME }}/app/frontend/pub/;
 ```
 
 ПОСЛЕ:
+
 ```nginx
 server_name {{ domain_name }} www.{{ domain_name }};
 root        {{ web_root }}/{{ domain_name }}/app/frontend/pub/;
@@ -783,11 +801,13 @@ grep -RIn "HOST_IP" ansible/
 В `group_vars/all/main.yml`:
 
 ДО:
+
 ```yaml
 HOST_IP: "{{ hostvars[groups['site'][0]]['ansible_host'] }}"
 ```
 
 ПОСЛЕ:
+
 ```yaml
 host_ip: "{{ hostvars[groups['site'][0]]['ansible_host'] }}"
 ```
@@ -805,6 +825,7 @@ grep -RIn "LOCAL_HOME_PATH" ansible/
 В `group_vars/all/ssh.yml`:
 
 ДО:
+
 ```yaml
 LOCAL_HOME_PATH: "{{ lookup('env', 'HOME') }}"
 ...
@@ -814,6 +835,7 @@ local_ssh_keys_dir: "{{ LOCAL_HOME_PATH }}/.ssh"
 ```
 
 ПОСЛЕ:
+
 ```yaml
 local_home_path: "{{ lookup('env', 'HOME') }}"
 ...
@@ -829,6 +851,7 @@ local_ssh_keys_dir: "{{ local_home_path }}/.ssh"
 В `group_vars/all/security.yml`:
 
 ДО:
+
 ```yaml
 banTime: 3600
 findTime: 600
@@ -836,6 +859,7 @@ maxRetry: 5
 ```
 
 ПОСЛЕ:
+
 ```yaml
 ban_time: 3600
 find_time: 600
@@ -845,6 +869,7 @@ max_retry: 5
 В `roles/system/fail2ban/templates/jail.local.j2`:
 
 ДО:
+
 ```jinja
 bantime = {{ banTime }}
 findtime = {{ findTime }}
@@ -852,6 +877,7 @@ maxretry = {{ maxRetry }}
 ```
 
 ПОСЛЕ:
+
 ```jinja
 bantime = {{ ban_time }}
 findtime = {{ find_time }}
@@ -868,45 +894,48 @@ maxretry = {{ max_retry }}
 ### D6.1. Заменить определение в `group_vars/all/security.yml`
 
 ДО:
+
 ```yaml
 jailsEnableStatus:
-  sshd: true
-  nginx-http-auth: true
-  nginx-limit-req: false
-  nginx-botsearch: true
-  nginx-bad-request: true
-  nginx-forbidden: true
-  php-url-fopen: true
-  ...
-  php-fpm: false
-  redis-auth: false
-  yii2-auth: false
+    sshd: true
+    nginx-http-auth: true
+    nginx-limit-req: false
+    nginx-botsearch: true
+    nginx-bad-request: true
+    nginx-forbidden: true
+    php-url-fopen: true
+    ...
+    php-fpm: false
+    redis-auth: false
+    yii2-auth: false
 ```
 
 ПОСЛЕ:
+
 ```yaml
 jails_enable_status:
-  sshd: true
-  nginx_http_auth: true
-  nginx_limit_req: false
-  nginx_botsearch: true
-  nginx_bad_request: true
-  nginx_forbidden: true
-  php_url_fopen: true
-  vsftpd: false
-  mysqld_auth: false
-  traefik_auth: false
-  recidive: true
-  sendmail_auth: false
-  sendmail_reject: false
-  php_fpm: false
-  redis_auth: false
-  yii2_auth: false
+    sshd: true
+    nginx_http_auth: true
+    nginx_limit_req: false
+    nginx_botsearch: true
+    nginx_bad_request: true
+    nginx_forbidden: true
+    php_url_fopen: true
+    vsftpd: false
+    mysqld_auth: false
+    traefik_auth: false
+    recidive: true
+    sendmail_auth: false
+    sendmail_reject: false
+    php_fpm: false
+    redis_auth: false
+    yii2_auth: false
 ```
 
 ### D6.2. Поправить `jail.local.j2`
 
 ДО:
+
 ```jinja
 [sshd]
 enabled = {{ jailsEnableStatus.sshd | bool | lower }}
@@ -926,6 +955,7 @@ backend = polling
 ```
 
 ПОСЛЕ:
+
 ```jinja
 [sshd]
 enabled = {{ jails_enable_status.sshd | bool | lower }}
@@ -963,6 +993,7 @@ mkdir -p ansible/secrets/ssh
 В `ansible/.gitignore` добавить строку:
 
 ДО:
+
 ```
 /inventory/hosts.yml
 /logs/*
@@ -972,6 +1003,7 @@ mkdir -p ansible/secrets/ssh
 ```
 
 ПОСЛЕ:
+
 ```
 /inventory/hosts.yml
 /logs/*
@@ -1004,11 +1036,13 @@ touch ansible/secrets/ssh/.gitkeep
 **Файл:** `ansible/group_vars/all/ssh.yml`
 
 ДО:
+
 ```yaml
 local_ssh_keys_dir: "{{ local_home_path }}/.ssh"
 ```
 
 ПОСЛЕ:
+
 ```yaml
 local_ssh_keys_dir: "{{ playbook_dir }}/../secrets/ssh"
 ```
@@ -1033,47 +1067,51 @@ mv ~/.ssh/key_<domain>* ansible/secrets/ssh/
 **Файл:** `ansible/inventory/hosts.yml.example`
 
 ДО:
+
 ```yaml
 ---
 all:
-  children:
-    site:
-      hosts:
-        server:
-          ansible_connection: ssh
-          ansible_host: 000.000.000.000
-          ansible_port: 22
-          ansible_ssh_private_key_file: "{{ site_ansible_key | default(omit) }}"
-          ansible_user: "{{ site_ansible_user }}"
-          ansible_password: "{{ vault_ansible_password | default(omit) }}"
+    children:
+        site:
+            hosts:
+                server:
+                    ansible_connection: ssh
+                    ansible_host: 000.000.000.000
+                    ansible_port: 22
+                    ansible_ssh_private_key_file: "{{ site_ansible_key | default(omit) }}"
+                    ansible_user: "{{ site_ansible_user }}"
+                    ansible_password: "{{ vault_ansible_password | default(omit) }}"
 ```
 
 ПОСЛЕ:
+
 ```yaml
 ---
 all:
-  children:
-    site:
-      hosts:
-        server:
-          ansible_connection: ssh
-          ansible_host: 000.000.000.000
-          ansible_port: 22
-          ansible_ssh_private_key_file: "{{ ordinary_key_path }}"
-          ansible_user: "{{ site_ansible_user }}"
-          # ansible_password больше не нужен — Ansible работает только по ключу.
-          # Если нужен пароль для первого ssh-copy-id, использовать ssh CLI напрямую.
+    children:
+        site:
+            hosts:
+                server:
+                    ansible_connection: ssh
+                    ansible_host: 000.000.000.000
+                    ansible_port: 22
+                    ansible_ssh_private_key_file: "{{ ordinary_key_path }}"
+                    ansible_user: "{{ site_ansible_user }}"
+                    # ansible_password больше не нужен — Ansible работает только по ключу.
+                    # Если нужен пароль для первого ssh-copy-id, использовать ssh CLI напрямую.
 ```
 
 В `group_vars/all/ssh.yml` синхронно убрать `site_ansible_key` (он стал лишним):
 
 ДО:
+
 ```yaml
 site_ansible_user: root
 site_ansible_key: ~
 ```
 
 ПОСЛЕ:
+
 ```yaml
 site_ansible_user: root
 ```
@@ -1089,11 +1127,13 @@ site_ansible_user: root
 **Файл:** `ansible/group_vars/all/ssh.yml`
 
 ДО:
+
 ```yaml
 ssh_key_passphrase: "{{ vault_ssh_key_passphrase }}"
 ```
 
 ПОСЛЕ:
+
 ```yaml
 # Stages 0–6 работают БЕЗ passphrase. Vault-переменная зарезервирована за Stage 7.
 ssh_key_passphrase: ""
@@ -1131,43 +1171,43 @@ verify_ssh_key: "{{ emergency_key_path }}"
 
 ```yaml
 ---
-- name: "verify_ssh: SSH login {{ verify_ssh_user }}@{{ target_host }}"
-  delegate_to: localhost
-  command: >
-    ssh -i {{ verify_ssh_key }}
-        -o BatchMode=yes
-        -o StrictHostKeyChecking=yes
-        -o ConnectTimeout=10
-        -p {{ target_ssh_port }}
-        {{ verify_ssh_user }}@{{ target_host }} "echo OK"
-  register: verify_ssh_result
-  changed_when: false
-  failed_when: "'OK' not in verify_ssh_result.stdout"
+-   name: "verify_ssh: SSH login {{ verify_ssh_user }}@{{ target_host }}"
+    delegate_to: localhost
+    command: >
+        ssh -i {{ verify_ssh_key }}
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+            -o ConnectTimeout=10
+            -p {{ target_ssh_port }}
+            {{ verify_ssh_user }}@{{ target_host }} "echo OK"
+    register: verify_ssh_result
+    changed_when: false
+    failed_when: "'OK' not in verify_ssh_result.stdout"
 
-- name: "verify_ssh: assert login succeeded for {{ verify_ssh_user }}"
-  assert:
-    that:
-      - verify_ssh_result.rc == 0
-    fail_msg: "SSH login as {{ verify_ssh_user }} via {{ verify_ssh_key }} FAILED!"
-    success_msg: "SSH login as {{ verify_ssh_user }} OK"
+-   name: "verify_ssh: assert login succeeded for {{ verify_ssh_user }}"
+    assert:
+        that:
+            - verify_ssh_result.rc == 0
+        fail_msg: "SSH login as {{ verify_ssh_user }} via {{ verify_ssh_key }} FAILED!"
+        success_msg: "SSH login as {{ verify_ssh_user }} OK"
 ```
 
 ### F1.3. Пример использования (для F5, F6)
 
 ```yaml
-- name: Verify root SSH login via emergency key
-  include_role:
-    name: verify_ssh
-  vars:
-    verify_ssh_user: root
-    verify_ssh_key: "{{ emergency_key_path }}"
+-   name: Verify root SSH login via emergency key
+    include_role:
+        name: verify_ssh
+    vars:
+        verify_ssh_user: root
+        verify_ssh_key: "{{ emergency_key_path }}"
 
-- name: Verify sudo user SSH login via ordinary key
-  include_role:
-    name: verify_ssh
-  vars:
-    verify_ssh_user: "{{ new_user }}"
-    verify_ssh_key: "{{ ordinary_key_path }}"
+-   name: Verify sudo user SSH login via ordinary key
+    include_role:
+        name: verify_ssh
+    vars:
+        verify_ssh_user: "{{ new_user }}"
+        verify_ssh_key: "{{ ordinary_key_path }}"
 ```
 
 **Коммит:** `feat(ansible): add verify_ssh role for real SSH key login check`
@@ -1181,26 +1221,26 @@ verify_ssh_key: "{{ emergency_key_path }}"
 
 ```yaml
 ---
-- name: Ensure .ssh directory exists for new user
-  file:
-    path: "/home/{{ new_user }}/.ssh"
-    state: directory
-    mode: '0700'
-    owner: "{{ new_user }}"
-    group: "{{ new_user }}"
+-   name: Ensure .ssh directory exists for new user
+    file:
+        path: "/home/{{ new_user }}/.ssh"
+        state: directory
+        mode: '0700'
+        owner: "{{ new_user }}"
+        group: "{{ new_user }}"
 
-- name: Copy ordinary public key to {{ new_user }}
-  authorized_key:
-    user: "{{ new_user }}"
-    key: "{{ lookup('file', ordinary_pubkey_path) }}"
-    state: present
-    manage_dir: yes
+-   name: Copy ordinary public key to {{ new_user }}
+    authorized_key:
+        user: "{{ new_user }}"
+        key: "{{ lookup('file', ordinary_pubkey_path) }}"
+        state: present
+        manage_dir: yes
 ```
 
 > Зачем отдельная роль, если можно положить в `user_sudo_add_new`? Чтобы:
 > - роли соответствовали ровно одной задаче (создание юзера vs. деплой ключа);
 > - имена ролей `ssh_remote_root_keys` и `ssh_remote_user_keys` симметричны и в плейбуке
->   видно, какой ключ куда едет.
+    > видно, какой ключ куда едет.
 
 **Коммит:** `feat(ansible): add ssh_remote_user_keys role for sudo user pubkey deploy`
 
@@ -1216,23 +1256,23 @@ verify_ssh_key: "{{ emergency_key_path }}"
 # 3) Добавление отпечатка сервера в ~/.ssh/known_hosts
 ##########################################################
 ---
-- name: Pre-flight checks for stage 0
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    - name: Assert site group is non-empty in inventory
-      assert:
-        that:
-          - groups['site'] is defined
-          - groups['site'] | length > 0
-        fail_msg: "Inventory file does not define group 'site'. Запустите с -i inventory/hosts.yml"
+-   name: Pre-flight checks for stage 0
+    hosts: localhost
+    gather_facts: false
+    tasks:
+        -   name: Assert site group is non-empty in inventory
+            assert:
+                that:
+                    - groups['site'] is defined
+                    - groups['site'] | length > 0
+                fail_msg: "Inventory file does not define group 'site'. Запустите с -i inventory/hosts.yml"
 
-- name: Generate SSH keys and trust remote host
-  hosts: localhost
-  gather_facts: false
-  roles:
-    - ../roles/system/ssh_generate_local_keys
-    - ../roles/system/ssh_add_remote_host_to_known_hosts
+-   name: Generate SSH keys and trust remote host
+    hosts: localhost
+    gather_facts: false
+    roles:
+        - ../roles/system/ssh_generate_local_keys
+        - ../roles/system/ssh_add_remote_host_to_known_hosts
 ```
 
 > `gather_facts: false` для localhost — не нужны.
@@ -1258,26 +1298,26 @@ verify_ssh_key: "{{ emergency_key_path }}"
 # UFW и fail2ban — в Stage 3, чтобы не мешать первой проверке ключей.
 ##########################################################
 ---
-- name: Pre-flight checks for stage 1
-  hosts: site
-  gather_facts: false
-  tasks:
-    - name: Assert essential variables are defined
-      assert:
-        that:
-          - domain_name is defined and domain_name | length > 0
-          - host_ip is defined and host_ip | length > 0
-        fail_msg: "domain_name or host_ip is missing. Check group_vars/all/main.yml."
+-   name: Pre-flight checks for stage 1
+    hosts: site
+    gather_facts: false
+    tasks:
+        -   name: Assert essential variables are defined
+            assert:
+                that:
+                    - domain_name is defined and domain_name | length > 0
+                    - host_ip is defined and host_ip | length > 0
+                fail_msg: "domain_name or host_ip is missing. Check group_vars/all/main.yml."
 
-- name: Stage 1 - OS base configuration
-  hosts: site
-  remote_user: root
-  gather_facts: true
-  roles:
-    - ../roles/system/apt_update
-    - ../roles/system/locales_hostname_timezone
-    - ../roles/system/swap
-    - ../roles/system/systemd
+-   name: Stage 1 - OS base configuration
+    hosts: site
+    remote_user: root
+    gather_facts: true
+    roles:
+        - ../roles/system/apt_update
+        - ../roles/system/locales_hostname_timezone
+        - ../roles/system/swap
+        - ../roles/system/systemd
 ```
 
 > `become: true` намеренно убран — `remote_user: root` уже даёт нужные права. `become`
@@ -1301,40 +1341,40 @@ verify_ssh_key: "{{ emergency_key_path }}"
 # ВНИМАНИЕ: пароль НЕ отключается, hardening — в Stage 3.
 ##########################################################
 ---
-- name: Pre-flight checks for stage 2
-  hosts: site
-  gather_facts: false
-  tasks:
-    - name: Assert new_user is set
-      assert:
-        that:
-          - new_user is defined and new_user | length > 0
-        fail_msg: "new_user is not set. Check group_vars/all/ssh.yml."
+-   name: Pre-flight checks for stage 2
+    hosts: site
+    gather_facts: false
+    tasks:
+        -   name: Assert new_user is set
+            assert:
+                that:
+                    - new_user is defined and new_user | length > 0
+                fail_msg: "new_user is not set. Check group_vars/all/ssh.yml."
 
-- name: Stage 2 - User access setup
-  hosts: site
-  remote_user: root
-  gather_facts: true
-  roles:
-    - ../roles/system/user_sudo_add_new
-    - ../roles/system/ssh_remote_root_keys      # emergency на root
-    - ../roles/system/ssh_remote_user_keys      # ordinary на new_user (F2)
-    - ../roles/system/ssh_logs_journald
+-   name: Stage 2 - User access setup
+    hosts: site
+    remote_user: root
+    gather_facts: true
+    roles:
+        - ../roles/system/user_sudo_add_new
+        - ../roles/system/ssh_remote_root_keys      # emergency на root
+        - ../roles/system/ssh_remote_user_keys      # ordinary на new_user (F2)
+        - ../roles/system/ssh_logs_journald
 
-  post_tasks:
-    - name: Verify root SSH login via emergency key
-      include_role:
-        name: ../roles/system/verify_ssh
-      vars:
-        verify_ssh_user: root
-        verify_ssh_key: "{{ emergency_key_path }}"
+    post_tasks:
+        -   name: Verify root SSH login via emergency key
+            include_role:
+                name: ../roles/system/verify_ssh
+            vars:
+                verify_ssh_user: root
+                verify_ssh_key: "{{ emergency_key_path }}"
 
-    - name: Verify new_user SSH login via ordinary key
-      include_role:
-        name: ../roles/system/verify_ssh
-      vars:
-        verify_ssh_user: "{{ new_user }}"
-        verify_ssh_key: "{{ ordinary_key_path }}"
+        -   name: Verify new_user SSH login via ordinary key
+            include_role:
+                name: ../roles/system/verify_ssh
+            vars:
+                verify_ssh_user: "{{ new_user }}"
+                verify_ssh_key: "{{ ordinary_key_path }}"
 ```
 
 > `post_tasks:` — выполняются после ролей. Это правильное место для проверок «после
@@ -1347,6 +1387,7 @@ verify_ssh_key: "{{ emergency_key_path }}"
 **Новый файл:** `ansible/playbooks/stage-3-server-security.yml`
 
 Порядок шагов (внешний обзор п. 6):
+
 1. pre-check verify_ssh — убедиться что ключи работают **до** того как отключим пароль.
 2. UFW — фаервол.
 3. ssh_remote_security — отключение пароля + hardening sshd.
@@ -1361,62 +1402,62 @@ verify_ssh_key: "{{ emergency_key_path }}"
 # Запускать ТОЛЬКО после успешного Stage 2.
 ##########################################################
 ---
-- name: Pre-flight checks for stage 3
-  hosts: site
-  gather_facts: false
-  tasks:
-    - name: Assert essential variables
-      assert:
-        that:
-          - new_user is defined and new_user | length > 0
-        fail_msg: "new_user is not set"
+-   name: Pre-flight checks for stage 3
+    hosts: site
+    gather_facts: false
+    tasks:
+        -   name: Assert essential variables
+            assert:
+                that:
+                    - new_user is defined and new_user | length > 0
+                fail_msg: "new_user is not set"
 
-- name: Stage 3 - Security hardening
-  hosts: site
-  remote_user: root
-  gather_facts: true
+-   name: Stage 3 - Security hardening
+    hosts: site
+    remote_user: root
+    gather_facts: true
 
-  pre_tasks:
-    - name: Pre-check root SSH login
-      include_role:
-        name: ../roles/system/verify_ssh
-      vars:
-        verify_ssh_user: root
-        verify_ssh_key: "{{ emergency_key_path }}"
+    pre_tasks:
+        -   name: Pre-check root SSH login
+            include_role:
+                name: ../roles/system/verify_ssh
+            vars:
+                verify_ssh_user: root
+                verify_ssh_key: "{{ emergency_key_path }}"
 
-    - name: Pre-check new_user SSH login
-      include_role:
-        name: ../roles/system/verify_ssh
-      vars:
-        verify_ssh_user: "{{ new_user }}"
-        verify_ssh_key: "{{ ordinary_key_path }}"
+        -   name: Pre-check new_user SSH login
+            include_role:
+                name: ../roles/system/verify_ssh
+            vars:
+                verify_ssh_user: "{{ new_user }}"
+                verify_ssh_key: "{{ ordinary_key_path }}"
 
-  roles:
-    - ../roles/system/ufw
-    - ../roles/system/ssh_remote_security
+    roles:
+        - ../roles/system/ufw
+        - ../roles/system/ssh_remote_security
 
-  post_tasks:
-    - name: Post-check root SSH login after sshd hardening
-      include_role:
-        name: ../roles/system/verify_ssh
-      vars:
-        verify_ssh_user: root
-        verify_ssh_key: "{{ emergency_key_path }}"
+    post_tasks:
+        -   name: Post-check root SSH login after sshd hardening
+            include_role:
+                name: ../roles/system/verify_ssh
+            vars:
+                verify_ssh_user: root
+                verify_ssh_key: "{{ emergency_key_path }}"
 
-    - name: Post-check new_user SSH login after sshd hardening
-      include_role:
-        name: ../roles/system/verify_ssh
-      vars:
-        verify_ssh_user: "{{ new_user }}"
-        verify_ssh_key: "{{ ordinary_key_path }}"
+        -   name: Post-check new_user SSH login after sshd hardening
+            include_role:
+                name: ../roles/system/verify_ssh
+            vars:
+                verify_ssh_user: "{{ new_user }}"
+                verify_ssh_key: "{{ ordinary_key_path }}"
 
-- name: Stage 3 - Enable fail2ban (after SSH verification)
-  hosts: site
-  remote_user: root
-  roles:
-    - ../roles/system/fail2ban
-    # AppArmor (после фазы B4 — в complain mode) можно включать тут же или отдельно:
-    # - ../roles/system/app_armor
+-   name: Stage 3 - Enable fail2ban (after SSH verification)
+    hosts: site
+    remote_user: root
+    roles:
+        - ../roles/system/fail2ban
+        # AppArmor (после фазы B4 — в complain mode) можно включать тут же или отдельно:
+        # - ../roles/system/app_armor
 ```
 
 > fail2ban вынесен в отдельную play **специально** — чтобы post-tasks из предыдущей play
@@ -1437,36 +1478,36 @@ verify_ssh_key: "{{ emergency_key_path }}"
 # Redis, Memcached, MySQL, Nginx, PHP + очистка apt.
 ##########################################################
 ---
-- name: Pre-flight checks for stage 4
-  hosts: site
-  gather_facts: false
-  tasks:
-    - name: Assert vault-derived variables
-      assert:
-        that:
-          - vault_mysql_root_password is defined and vault_mysql_root_password | length > 0
-          - vault_mysql_db_user_password is defined and vault_mysql_db_user_password | length > 0
-          # vault_redis_password добавится в фазе H1
-        fail_msg: |
-          Required vault variables are missing.
-          Проверьте что group_vars/all/secrets.vault расшифровывается и содержит ключи.
+-   name: Pre-flight checks for stage 4
+    hosts: site
+    gather_facts: false
+    tasks:
+        -   name: Assert vault-derived variables
+            assert:
+                that:
+                    - vault_mysql_root_password is defined and vault_mysql_root_password | length > 0
+                    - vault_mysql_db_user_password is defined and vault_mysql_db_user_password | length > 0
+                    # vault_redis_password добавится в фазе H1
+                fail_msg: |
+                    Required vault variables are missing.
+                    Проверьте что group_vars/all/secrets.vault расшифровывается и содержит ключи.
 
-- name: Stage 4 - LEMP stack installation
-  hosts: site
-  remote_user: root
-  gather_facts: true
-  roles:
-    - ../roles/web-server/redis
-    - ../roles/web-server/memcached
-    - ../roles/web-server/mysql
-    - ../roles/web-server/nginx
-    - ../roles/web-server/php
+-   name: Stage 4 - LEMP stack installation
+    hosts: site
+    remote_user: root
+    gather_facts: true
+    roles:
+        - ../roles/web-server/redis
+        - ../roles/web-server/memcached
+        - ../roles/web-server/mysql
+        - ../roles/web-server/nginx
+        - ../roles/web-server/php
 
-- name: Stage 4 - Cleanup
-  hosts: site
-  remote_user: root
-  roles:
-    - ../roles/system/apt_clean
+-   name: Stage 4 - Cleanup
+    hosts: site
+    remote_user: root
+    roles:
+        - ../roles/system/apt_clean
 ```
 
 **Коммит:** `feat(ansible): add stage-4-webserver.yml playbook`
@@ -1499,21 +1540,21 @@ ansible-playbook -i inventory/hosts.yml playbooks/stage-4-webserver.yml
 ##########################################################
 
 nginx_sites:
-  - name: frontend
-    server_name: "{{ domain_name }} www.{{ domain_name }}"
-    web_root: "{{ web_root }}/{{ domain_name }}/app/frontend/pub"
-    client_max_body_size: 10M
-    php_fpm: true
-  - name: backend
-    server_name: "adm.{{ domain_name }} www.adm.{{ domain_name }}"
-    web_root: "{{ web_root }}/{{ domain_name }}/app/backend/pub"
-    client_max_body_size: 750M
-    php_fpm: true
-  - name: static
-    server_name: "files.{{ domain_name }} www.files.{{ domain_name }}"
-    web_root: "{{ web_root }}/{{ domain_name }}/app/static"
-    client_max_body_size: 1024M
-    php_fpm: false
+    -   name: frontend
+        server_name: "{{ domain_name }} www.{{ domain_name }}"
+        web_root: "{{ web_root }}/{{ domain_name }}/app/frontend/pub"
+        client_max_body_size: 10M
+        php_fpm: true
+    -   name: backend
+        server_name: "adm.{{ domain_name }} www.adm.{{ domain_name }}"
+        web_root: "{{ web_root }}/{{ domain_name }}/app/backend/pub"
+        client_max_body_size: 750M
+        php_fpm: true
+    -   name: static
+        server_name: "files.{{ domain_name }} www.files.{{ domain_name }}"
+        web_root: "{{ web_root }}/{{ domain_name }}/app/static"
+        client_max_body_size: 1024M
+        php_fpm: false
 ```
 
 На этом шаге переменная определена, но **не используется** — это безопасный коммит.
@@ -1528,16 +1569,16 @@ nginx_sites:
 как nginx попытается их обслуживать):
 
 ```yaml
-- name: Create web roots for all configured nginx sites
-  ansible.builtin.file:
-    path: "{{ item.web_root }}"
-    state: directory
-    owner: www-data
-    group: www-data
-    mode: '0755'
-  loop: "{{ nginx_sites }}"
-  loop_control:
-    label: "{{ item.name }}"
+-   name: Create web roots for all configured nginx sites
+    ansible.builtin.file:
+        path: "{{ item.web_root }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+    loop: "{{ nginx_sites }}"
+    loop_control:
+        label: "{{ item.name }}"
 ```
 
 > Заменяет закомментированный блок `Create web root directories` в конце файла.
@@ -1620,6 +1661,7 @@ server {
 (⚠️⚠️ ЗАМЕЧАНИЕ 2 в ANALYSIS 3.2.3).
 
 Логика:
+
 - В `nginx_sites` добавить булевый ключ `ssl_enabled: false` (по умолчанию).
 - Stage 5a после получения сертификатов переключает `ssl_enabled: true` (либо через
   отдельный inventory var, либо проще — через factual check
@@ -1653,11 +1695,13 @@ vault_redis_password: "сгенерированный_длинный_парол�
 ### H1.2. Раскомментировать маппинг в `group_vars/all/vault.yml`
 
 ДО:
+
 ```yaml
 redis_password_from_vault: "{{ vault_redis_password | default('') }}"
 ```
 
 ПОСЛЕ:
+
 ```yaml
 redis_password: "{{ vault_redis_password }}"
 ```
@@ -1669,6 +1713,7 @@ redis_password: "{{ vault_redis_password }}"
 **Файл:** `ansible/roles/web-server/redis/templates/redis.conf.j2`
 
 ДО:
+
 ```
 bind 127.0.0.1
 protected-mode yes
@@ -1683,6 +1728,7 @@ dbfilename dump.rdb
 ```
 
 ПОСЛЕ:
+
 ```
 bind 127.0.0.1
 protected-mode yes
@@ -1733,14 +1779,14 @@ allow_url_include = Off
 ### H2.2. Создать `roles/web-server/php/files/conf.d/opcache.ini`
 
 ```ini
-opcache.enable=1
-opcache.enable_cli=1
-opcache.memory_consumption=128
-opcache.interned_strings_buffer=16
-opcache.max_accelerated_files=10000
-opcache.validate_timestamps=0
-opcache.revalidate_freq=0
-opcache.save_comments=1
+opcache.enable = 1
+opcache.enable_cli = 1
+opcache.memory_consumption = 128
+opcache.interned_strings_buffer = 16
+opcache.max_accelerated_files = 10000
+opcache.validate_timestamps = 0
+opcache.revalidate_freq = 0
+opcache.save_comments = 1
 ```
 
 > `validate_timestamps=0` — для production. После деплоя кода нужно вручную делать
@@ -1749,9 +1795,9 @@ opcache.save_comments=1
 ### H2.3. Создать `roles/web-server/php/files/conf.d/apcu.ini`
 
 ```ini
-apcu.enable=1
-apcu.enable_cli=1
-apcu.shm_size=64M
+apcu.enable = 1
+apcu.enable_cli = 1
+apcu.shm_size = 64M
 ```
 
 ### H2.4. (опц.) Создать `roles/web-server/php/files/conf.d/open_basedir.ini`
@@ -1770,24 +1816,24 @@ apcu.shm_size=64M
 В `ansible/roles/web-server/php/tasks/main.yml` уже есть:
 
 ```yaml
-- name: Copy PHP configuration files from files/conf.d
-  ansible.builtin.copy:
-    src: files/conf.d/
-    dest: /etc/php/{{ php_version }}/fpm/conf.d/
-    owner: www-data
+-   name: Copy PHP configuration files from files/conf.d
+    ansible.builtin.copy:
+        src: files/conf.d/
+        dest: /etc/php/{{ php_version }}/fpm/conf.d/
+        owner: www-data
 ```
 
 Если этой задачи нет (или копируются не все файлы) — добавить/исправить. Также скопировать
 в `cli` SAPI (если используется CLI Yii2):
 
 ```yaml
-- name: Copy PHP configuration files to cli/conf.d
-  ansible.builtin.copy:
-    src: files/conf.d/
-    dest: /etc/php/{{ php_version }}/cli/conf.d/
-    owner: root
-    group: root
-    mode: '0644'
+-   name: Copy PHP configuration files to cli/conf.d
+    ansible.builtin.copy:
+        src: files/conf.d/
+        dest: /etc/php/{{ php_version }}/cli/conf.d/
+        owner: root
+        group: root
+        mode: '0644'
 ```
 
 **Коммит:** `feat(ansible): add php security/opcache/apcu ini files`
@@ -1796,36 +1842,38 @@ apcu.shm_size=64M
 
 Уже частично сделано в F4–F7. На этом шаге — формализуем. Per-stage списки переменных:
 
-| Stage | vault-переменные для assert |
-|-------|------------------------------|
-| 0     | (ничего) |
-| 1     | (ничего) |
-| 2     | (ничего из vault; проверяем `new_user`) |
-| 3     | (ничего из vault) |
+| Stage | vault-переменные для assert                                                         |
+|-------|-------------------------------------------------------------------------------------|
+| 0     | (ничего)                                                                            |
+| 1     | (ничего)                                                                            |
+| 2     | (ничего из vault; проверяем `new_user`)                                             |
+| 3     | (ничего из vault)                                                                   |
 | 4     | `vault_mysql_root_password`, `vault_mysql_db_user_password`, `vault_redis_password` |
-| 5a    | (ничего из vault; проверяем DNS) |
-| 5b    | (ничего) |
-| 6     | (ничего) |
+| 5a    | (ничего из vault; проверяем DNS)                                                    |
+| 5b    | (ничего)                                                                            |
+| 6     | (ничего)                                                                            |
 
 Шаблон pre-flight (повторно — см. F4):
 
 ```yaml
-- name: Pre-flight checks for stage N
-  hosts: site            # или localhost для stage 0
-  gather_facts: false
-  tasks:
-    - name: Assert required vault variables are defined
-      assert:
-        that:
-          - vault_mysql_root_password is defined and vault_mysql_root_password | length > 0
-          # ...
-        fail_msg: |
-          Required vault variables are missing or empty.
-          Make sure group_vars/all/secrets.vault is decrypted and contains all required keys.
-      run_once: true
+-   name: Pre-flight checks for stage N
+    hosts: site            # или localhost для stage 0
+    gather_facts: false
+    tasks:
+        -   name: Assert required vault variables are defined
+            assert:
+                that:
+                    - vault_mysql_root_password is defined and vault_mysql_root_password | length > 0
+                    # ...
+                fail_msg: |
+                    Required vault variables are missing or empty.
+                    Make sure group_vars/all/secrets.vault is decrypted and contains all required keys.
+            run_once: true
 ```
 
 > **Важно (внешний обзор п. 1):** `vault_root_password` НЕ проверяем — переменная выпилена.
+
+> ⚠️ ЗАМЕЧАНИЕ: Пароль от root надо вернуть для автоматизации отправки ключей
 
 **Коммит:** `feat(ansible): formalize per-stage pre-flight assert on vault variables`
 
@@ -1833,6 +1881,7 @@ apcu.shm_size=64M
 
 Только когда Yii2-приложение начнёт писать через Monolog→SyslogHandler с ident
 `yii2-auth`. До этого:
+
 - `jails_enable_status.yii2_auth: false` (уже в C4).
 - В `jail.local.j2` добавить блок (необходим filter в `/etc/fail2ban/filter.d/yii2-auth.conf`,
   но его создание — задача отдельного коммита):
@@ -1869,29 +1918,29 @@ port = http,https
 # Запускать после Stage 4 и настройки DNS.
 ##########################################################
 ---
-- name: Pre-flight checks for stage 5a
-  hosts: site
-  gather_facts: false
-  tasks:
-    - name: Resolve {{ domain_name }} (DNS check)
-      delegate_to: localhost
-      command: dig +short {{ domain_name }}
-      register: dns_check
-      changed_when: false
+-   name: Pre-flight checks for stage 5a
+    hosts: site
+    gather_facts: false
+    tasks:
+        -   name: Resolve {{ domain_name }} (DNS check)
+            delegate_to: localhost
+            command: dig +short {{ domain_name }}
+            register: dns_check
+            changed_when: false
 
-    - name: Assert DNS resolves to server IP
-      assert:
-        that:
-          - dns_check.stdout | trim == host_ip
-        fail_msg: |
-          DNS для {{ domain_name }} указывает на {{ dns_check.stdout | trim }},
-          а сервер — {{ host_ip }}. Поправь DNS и повтори.
+        -   name: Assert DNS resolves to server IP
+            assert:
+                that:
+                    - dns_check.stdout | trim == host_ip
+                fail_msg: |
+                    DNS для {{ domain_name }} указывает на {{ dns_check.stdout | trim }},
+                    а сервер — {{ host_ip }}. Поправь DNS и повтори.
 
-- name: Stage 5a - Certbot
-  hosts: site
-  remote_user: root
-  roles:
-    - ../roles/web-server/certbot
+-   name: Stage 5a - Certbot
+    hosts: site
+    remote_user: root
+    roles:
+        - ../roles/web-server/certbot
 ```
 
 В `roles/web-server/certbot/tasks/main.yml` (создаётся/обновляется отдельно — это код
@@ -1899,36 +1948,36 @@ port = http,https
 
 ```yaml
 ---
-- name: Install certbot + nginx plugin
-  apt:
-    name:
-      - certbot
-      - python3-certbot-nginx
-    state: present
-    update_cache: yes
+-   name: Install certbot + nginx plugin
+    apt:
+        name:
+            - certbot
+            - python3-certbot-nginx
+        state: present
+        update_cache: yes
 
-- name: Build list of -d arguments from nginx_sites
-  set_fact:
-    certbot_domains_args: >-
-      {{ nginx_sites | map(attribute='server_name')
-                     | map('split', ' ')
-                     | flatten
-                     | map('regex_replace', '^(.+)$', '-d \1')
-                     | join(' ') }}
+-   name: Build list of -d arguments from nginx_sites
+    set_fact:
+        certbot_domains_args: >-
+            {{ nginx_sites | map(attribute='server_name')
+                           | map('split', ' ')
+                           | flatten
+                           | map('regex_replace', '^(.+)$', '-d \1')
+                           | join(' ') }}
 
-- name: Request Let's Encrypt certificates
-  command: >
-    certbot --nginx --non-interactive --agree-tos
-            -m {{ certbot_email }}
-            {{ certbot_domains_args }}
-  args:
-    creates: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+-   name: Request Let's Encrypt certificates
+    command: >
+        certbot --nginx --non-interactive --agree-tos
+                -m {{ certbot_email }}
+                {{ certbot_domains_args }}
+    args:
+        creates: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
 
-- name: Ensure certbot renew timer is enabled
-  systemd:
-    name: certbot.timer
-    enabled: yes
-    state: started
+-   name: Ensure certbot renew timer is enabled
+    systemd:
+        name: certbot.timer
+        enabled: yes
+        state: started
 ```
 
 **Коммит:** `feat(ansible): add stage-5a-certbot.yml playbook`
@@ -1945,14 +1994,15 @@ port = http,https
 #     systemctl enable --now yii-queue@1
 ##########################################################
 ---
-- name: Stage 5b - Queue workers
-  hosts: site
-  remote_user: root
-  roles:
-    - ../roles/web-server/queue/systemd
+-   name: Stage 5b - Queue workers
+    hosts: site
+    remote_user: root
+    roles:
+        - ../roles/web-server/queue/systemd
 ```
 
 В роли `roles/web-server/queue/systemd/` нужно убедиться, что юнит-файл:
+
 - использует `{{ queue_workers_count }}` для параметризации;
 - содержит `MemoryMax`, `CPUQuota`, `RestartSec=5`;
 - юнит-задача в Ansible — `state: stopped, enabled: no` (не `started/enabled`).
@@ -1960,23 +2010,23 @@ port = http,https
 Пример конца роли:
 
 ```yaml
-- name: Install yii-queue@.service unit
-  template:
-    src: yii-queue@.service.j2
-    dest: /etc/systemd/system/yii-queue@.service
-    mode: '0644'
+-   name: Install yii-queue@.service unit
+    template:
+        src: yii-queue@.service.j2
+        dest: /etc/systemd/system/yii-queue@.service
+        mode: '0644'
 
-- name: Reload systemd
-  systemd:
-    daemon_reload: yes
+-   name: Reload systemd
+    systemd:
+        daemon_reload: yes
 
-- name: Ensure units are stopped and disabled (will be enabled manually after first deploy)
-  systemd:
-    name: "yii-queue@{{ item }}"
-    state: stopped
-    enabled: no
-  loop: "{{ range(1, queue_workers_count + 1) | list }}"
-  ignore_errors: true  # юнит может ещё не существовать на первой итерации
+-   name: Ensure units are stopped and disabled (will be enabled manually after first deploy)
+    systemd:
+        name: "yii-queue@{{ item }}"
+        state: stopped
+        enabled: no
+    loop: "{{ range(1, queue_workers_count + 1) | list }}"
+    ignore_errors: true  # юнит может ещё не существовать на первой итерации
 ```
 
 **Коммит:** `feat(ansible): add stage-5b-queue.yml playbook`
@@ -1992,11 +2042,11 @@ port = http,https
 # В Makefile не входит в full-deploy.
 ##########################################################
 ---
-- name: Stage 5c - Data transfer (RESERVE)
-  hosts: site
-  remote_user: root
-  roles:
-    - ../roles/web-server/data_transfer
+-   name: Stage 5c - Data transfer (RESERVE)
+    hosts: site
+    remote_user: root
+    roles:
+        - ../roles/web-server/data_transfer
 ```
 
 Хардкод путей `/mnt/a/openserver/...` и `mode: '7777'` в роли **не трогаем** — пока роль
@@ -2142,108 +2192,108 @@ help:  ## Показать список команд
 # Stage 6: комплексная проверка сервера
 ##########################################################
 ---
-- name: Stage 6 - Verify SSH access
-  hosts: site
-  gather_facts: false
-  remote_user: "{{ new_user }}"
-  tasks:
-    - name: Verify root SSH login via emergency key
-      include_role:
-        name: ../roles/system/verify_ssh
-      vars:
-        verify_ssh_user: root
-        verify_ssh_key: "{{ emergency_key_path }}"
+-   name: Stage 6 - Verify SSH access
+    hosts: site
+    gather_facts: false
+    remote_user: "{{ new_user }}"
+    tasks:
+        -   name: Verify root SSH login via emergency key
+            include_role:
+                name: ../roles/system/verify_ssh
+            vars:
+                verify_ssh_user: root
+                verify_ssh_key: "{{ emergency_key_path }}"
 
-    - name: Verify new_user SSH login via ordinary key
-      include_role:
-        name: ../roles/system/verify_ssh
-      vars:
-        verify_ssh_user: "{{ new_user }}"
-        verify_ssh_key: "{{ ordinary_key_path }}"
+        -   name: Verify new_user SSH login via ordinary key
+            include_role:
+                name: ../roles/system/verify_ssh
+            vars:
+                verify_ssh_user: "{{ new_user }}"
+                verify_ssh_key: "{{ ordinary_key_path }}"
 
-- name: Stage 6 - Verify services
-  hosts: site
-  remote_user: root
-  gather_facts: true
-  tasks:
-    - name: Check critical services are active
-      command: systemctl is-active {{ item }}
-      register: svc_status
-      changed_when: false
-      failed_when: svc_status.stdout != 'active'
-      loop:
-        - nginx
-        - "php{{ php_version }}-fpm"
-        - mysql
-        - redis-server
-        - memcached
-        - ufw
-        - fail2ban
+-   name: Stage 6 - Verify services
+    hosts: site
+    remote_user: root
+    gather_facts: true
+    tasks:
+        -   name: Check critical services are active
+            command: systemctl is-active {{ item }}
+            register: svc_status
+            changed_when: false
+            failed_when: svc_status.stdout != 'active'
+            loop:
+                - nginx
+                - "php{{ php_version }}-fpm"
+                - mysql
+                - redis-server
+                - memcached
+                - ufw
+                - fail2ban
 
-    - name: List listening TCP ports
-      command: ss -tlnp
-      register: listening
-      changed_when: false
+        -   name: List listening TCP ports
+            command: ss -tlnp
+            register: listening
+            changed_when: false
 
-    - name: Show listening ports
-      debug:
-        var: listening.stdout_lines
+        -   name: Show listening ports
+            debug:
+                var: listening.stdout_lines
 
-    - name: Check PHP modules
-      command: "php -m"
-      register: php_mods
-      changed_when: false
+        -   name: Check PHP modules
+            command: "php -m"
+            register: php_mods
+            changed_when: false
 
-    - name: Show PHP modules
-      debug:
-        var: php_mods.stdout_lines
+        -   name: Show PHP modules
+            debug:
+                var: php_mods.stdout_lines
 
-    - name: Check UFW status
-      command: ufw status verbose
-      register: ufw_status
-      changed_when: false
+        -   name: Check UFW status
+            command: ufw status verbose
+            register: ufw_status
+            changed_when: false
 
-    - name: Show UFW status
-      debug:
-        var: ufw_status.stdout_lines
+        -   name: Show UFW status
+            debug:
+                var: ufw_status.stdout_lines
 
-    - name: Check fail2ban-client status
-      command: fail2ban-client status
-      register: f2b_status
-      changed_when: false
+        -   name: Check fail2ban-client status
+            command: fail2ban-client status
+            register: f2b_status
+            changed_when: false
 
-    - name: Show fail2ban status
-      debug:
-        var: f2b_status.stdout_lines
+        -   name: Show fail2ban status
+            debug:
+                var: f2b_status.stdout_lines
 
-- name: Stage 6 - HTTP/HTTPS smoke
-  hosts: site
-  gather_facts: false
-  remote_user: root
-  tasks:
-    - name: HTTP probe (80)
-      uri:
-        url: "http://{{ domain_name }}/"
-        status_code: [200, 301, 302, 308, 404]
-        validate_certs: false
-        timeout: 10
-      register: http_probe
-      failed_when: false
+-   name: Stage 6 - HTTP/HTTPS smoke
+    hosts: site
+    gather_facts: false
+    remote_user: root
+    tasks:
+        -   name: HTTP probe (80)
+            uri:
+                url: "http://{{ domain_name }}/"
+                status_code: [ 200, 301, 302, 308, 404 ]
+                validate_certs: false
+                timeout: 10
+            register: http_probe
+            failed_when: false
 
-    - name: HTTPS probe (443)
-      uri:
-        url: "https://{{ domain_name }}/"
-        status_code: [200, 301, 302, 308, 404]
-        validate_certs: false
-        timeout: 10
-      register: https_probe
-      failed_when: false
+        -   name: HTTPS probe (443)
+            uri:
+                url: "https://{{ domain_name }}/"
+                status_code: [ 200, 301, 302, 308, 404 ]
+                validate_certs: false
+                timeout: 10
+            register: https_probe
+            failed_when: false
 
-    - name: Show HTTP/HTTPS probe results
-      debug:
-        msg:
-          - "HTTP {{ http_probe.status | default('FAIL') }}"
-          - "HTTPS {{ https_probe.status | default('not configured / FAIL') }}"
+        -   name: Show HTTP/HTTPS probe results
+            debug:
+                msg:
+                    - "HTTP {{ http_probe.status | default('FAIL') }}"
+                    - "HTTPS {{ https_probe.status | default('not configured / FAIL') }}"
 ```
 
 > Намеренно `failed_when: false` для HTTP/HTTPS — Stage 6 не должен падать на отсутствии
@@ -2297,20 +2347,20 @@ git rm ansible/playbooks/remote-test.yml ansible/playbooks/remote-test-security.
 
 После каждой фазы должно работать как минимум:
 
-| После | Что работает |
-|-------|--------------|
-| A | (только документация) |
-| B | Старый flow + правильный аварийный ключ + рабочие SSH-тесты + MySQL whitelist + AppArmor complain |
-| C | Тот же flow, переменные читаются из `group_vars/all/*.yml` и `secrets.vault` |
-| D | То же, переменные в snake_case |
-| E | SSH-ключи в `ansible/secrets/ssh/`, не в HOME |
-| F | Новый `make stage-0..stage-4` параллельно со старым `make remote-*` |
-| G | Nginx без хардкода путей, web_root создаются перед стартом nginx |
-| H | Redis с паролем, PHP security/opcache/apcu, formal pre-flight assert |
-| I | Доступны `make stage-5a`, `stage-5b` (вручную) |
-| J | Только новые `stage-*.yml`, `full-deploy = 0+1+2+3+4+6` |
-| K | `make stage-6` проверяет весь сервер |
-| L | (опц.) Ключи с passphrase, всё в KeePass |
+| После | Что работает                                                                                      |
+|-------|---------------------------------------------------------------------------------------------------|
+| A     | (только документация)                                                                             |
+| B     | Старый flow + правильный аварийный ключ + рабочие SSH-тесты + MySQL whitelist + AppArmor complain |
+| C     | Тот же flow, переменные читаются из `group_vars/all/*.yml` и `secrets.vault`                      |
+| D     | То же, переменные в snake_case                                                                    |
+| E     | SSH-ключи в `ansible/secrets/ssh/`, не в HOME                                                     |
+| F     | Новый `make stage-0..stage-4` параллельно со старым `make remote-*`                               |
+| G     | Nginx без хардкода путей, web_root создаются перед стартом nginx                                  |
+| H     | Redis с паролем, PHP security/opcache/apcu, formal pre-flight assert                              |
+| I     | Доступны `make stage-5a`, `stage-5b` (вручную)                                                    |
+| J     | Только новые `stage-*.yml`, `full-deploy = 0+1+2+3+4+6`                                           |
+| K     | `make stage-6` проверяет весь сервер                                                              |
+| L     | (опц.) Ключи с passphrase, всё в KeePass                                                          |
 
 ---
 
