@@ -1,43 +1,56 @@
 include environments.sh
 SHELL := /bin/bash
 # Директива .ONESHELL: указывает make выполнять все команды в рецепте одной цели в одной оболочке, а не в отдельных оболочках для каждой строки. По умолчанию каждая строка в рецепте Makefile выполняется в новой сессии оболочки, из-за чего переменные окружения, установленные в одной строке, не сохраняются для следующей.
+# TODO - Кажется, в разрезе использования Makefile из под wsl2 всё равно не актуально
 .ONESHELL:
 # Уровни логирования `-v`, `-vv`, `-vvv`, `-vvvv`,
 
 # =============================================================================
-# Все команды в куче.
+# Stage-цели
 # =============================================================================
-local-init:
-	ansible-playbook playbooks/local-init.yml #-vv
+stage-0:  ## Локально: SSH-ключи + known_hosts
+	ansible-playbook -i inventory/hosts.yml playbooks/stage-0-local-init.yml
 
-remote-base:
-	ansible-playbook -i inventory/hosts.yml playbooks/remote-base.yml #-vv
+stage-1:  ## ОС: apt, locales, swap, systemd
+	ansible-playbook -i inventory/hosts.yml playbooks/stage-1-server-base.yml
 
-remote-webserver:
-	ansible-playbook -i inventory/hosts.yml playbooks/remote-webserver.yml #-vv
+stage-2:  ## Доступ: sudo user, ключи, journald, verify
+	ansible-playbook -i inventory/hosts.yml playbooks/stage-2-server-access.yml
 
-full-deploy: local-init remote-base remote-webserver
+stage-3:  ## Безопасность: UFW, sshd hardening, fail2ban
+	ansible-playbook -i inventory/hosts.yml playbooks/stage-3-server-security.yml
 
-remote-transfer-data:
-	ansible-playbook -i inventory/hosts.yml playbooks/transfer-data.yml -v
+stage-4:  ## LEMP: Redis, Memcached, MySQL, Nginx, PHP
+	ansible-playbook -i inventory/hosts.yml playbooks/stage-4-webserver.yml
 
-remote-queue-configure:
-	ansible-playbook -i inventory/hosts.yml playbooks/queue-configure.yml -v
+stage-5a: ## Certbot (только после Stage 4 + настройки DNS)
+	ansible-playbook -i inventory/hosts.yml playbooks/stage-5a-certbot.yml
 
-remote-test:
-	ansible-playbook -i inventory/hosts.yml playbooks/test-server.yml -v
+stage-5b: ## Queue workers (только после деплоя исходников)
+	ansible-playbook -i inventory/hosts.yml playbooks/stage-5b-queue.yml
 
-remote-security:
-	ansible-playbook -i inventory/hosts.yml playbooks/remote-security.yml -v
+stage-5c: ## (РЕЗЕРВ) data_transfer
+	ansible-playbook -i inventory/hosts.yml playbooks/stage-5c-data-transfer.yml
 
-remote-test-security:
-	ansible-playbook -i inventory/hosts.yml playbooks/remote-test-security.yml -v
+stage-6:  ## Verification
+	ansible-playbook -i inventory/hosts.yml playbooks/stage-6-verification.yml
+
+stage-7:  ## (опц.) Миграция ключей на passphrase
+	ansible-playbook -i inventory/hosts.yml playbooks/stage-7-key-hardening.yml
+
+docker-install: ## (РЕЗЕРВ) Установка Docker
+	ansible-playbook -i inventory/hosts.yml playbooks/optional-docker.yml
 
 # =============================================================================
-# Команды шифрования
+# Комбинированные цели
+# =============================================================================
+full-deploy: stage-0 stage-1 stage-2 stage-3 stage-4 stage-6
+
+# =============================================================================
+# Vault
 # =============================================================================
 vault-encrypt: # Шифрует из файла в Ansible Vault
-	ansible-vault encrypt ./group_vars/all/secrets.yml --output ./group_vars/all/secrets.vault
+	ansible-vault encrypt ./secrets/secrets.yml --output ./group_vars/all/secrets.vault
 vault-create: # Создание хранилища Ansible Vault
 	ansible-vault create ./group_vars/all/secrets.vault
 vault-edit: # Редактирование данных в хранилище Ansible Vault
@@ -46,28 +59,40 @@ vault-view: # Просмотр данных в хранилище Ansible Vault
 	ansible-vault view ./group_vars/all/secrets.vault
 
 # =============================================================================
-# Глобальные настройки перед работой с Ansible
+# Инициализация контроллера
 # =============================================================================
-init-ansible-and-other:
+init-ansible:
 	sudo apt update
-	sudo apt install -y ansible-core
-	sudo apt install -y nano
-	sudo apt install -y python3-pexpect
+	sudo apt install -y ansible-core python3-pexpect nano
 	sudo update-alternatives --set editor /bin/nano # Устанавливает nano редактором по-умолчанию для всей системы.
 
-galaxy-mysql-crypto:
-	ansible-galaxy collection install community.mysql
-	ansible-galaxy collection install community.crypto
+galaxy-install:
+	ansible-galaxy collection install community.mysql community.crypto
 
 # =============================================================================
-# Образцы команд проверки
+# Утилиты
 # =============================================================================
 syntax-check:
-# Проверка синтаксиса
-	ansible-playbook playbooks/00000000.yml --syntax-check -vvvv
+	@for f in playbooks/stage-*.yml; do \
+		echo "Checking $$f..."; \
+		ansible-playbook -i inventory/hosts.yml $$f --syntax-check -vvvv; \
+	done
+
+# Выводит иерархию групп и хостов в виде текстового дерева
+inventory-graph:
+	ansible-inventory -i inventory/hosts.yml --graph -vvvv
+
+help:  ## Показать список команд
+	@grep -E '^[a-zA-Z0-9_-]+:.*?##' $(MAKEFILE_LIST) | sort \
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
+
+# =============================================================================
+# Для справки
+# =============================================================================
+#demo:
 # dry-run. Симуляция выполнения, требуется подключение
-	ansible-playbook playbooks/00000000.yml --check -vvvv
-# Выводит иерархию групп и хостов в виде текстового дерева, удобного для визуального восприятия.
-	ansible-inventory --graph -vvvv
+	#ansible-playbook playbooks/00000000.yml --check -vvvv
 # Выводит полную структуру в формате JSON, включая переменные и метаданные, что более подходит для программной обработки или детального анализа.
-	ansible-inventory --list -vvvv
+	#ansible-inventory --list -vvvv
+
+.DEFAULT_GOAL := help
