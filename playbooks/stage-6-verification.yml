@@ -1,0 +1,108 @@
+##########################################################
+# Stage 6: комплексная проверка сервера
+# NB: Намеренно `failed_when: false` для HTTP/HTTPS — Stage 6 не должен падать на отсутствии
+# Certbot. Админ сам читает вывод.
+##########################################################
+---
+-   name: Stage 6 - Verify SSH access
+    hosts: site
+    gather_facts: false
+    remote_user: "{{ new_user }}"
+    tasks:
+      -   name: Verify root SSH login via emergency key
+          include_role:
+            name: ../roles/system/verify_ssh
+          vars:
+            verify_ssh_user: root
+            verify_ssh_key: "{{ emergency_key_path }}"
+
+      -   name: Verify new_user SSH login via ordinary key
+          include_role:
+            name: ../roles/system/verify_ssh
+          vars:
+            verify_ssh_user: "{{ new_user }}"
+            verify_ssh_key: "{{ ordinary_key_path }}"
+
+-   name: Stage 6 - Verify services
+    hosts: site
+    remote_user: root
+    gather_facts: true
+    tasks:
+      -   name: Check critical services are active
+          command: systemctl is-active {{ item }}
+          register: svc_status
+          changed_when: false
+          failed_when: svc_status.stdout != 'active'
+          loop:
+            - nginx
+            - "php{{ php_version }}-fpm"
+            - mysql
+            - redis-server
+            - memcached
+            - ufw
+            - fail2ban
+
+      -   name: List listening TCP ports
+          command: ss -tlnp
+          register: listening
+          changed_when: false
+
+      -   name: Show listening ports
+          debug:
+            var: listening.stdout_lines
+
+      -   name: Check PHP modules
+          command: "php -m"
+          register: php_mods
+          changed_when: false
+
+      -   name: Show PHP modules
+          debug:
+            var: php_mods.stdout_lines
+
+      -   name: Check UFW status
+          command: ufw status verbose
+          register: ufw_status
+          changed_when: false
+
+      -   name: Show UFW status
+          debug:
+            var: ufw_status.stdout_lines
+
+      -   name: Check fail2ban-client status
+          command: fail2ban-client status
+          register: f2b_status
+          changed_when: false
+
+      -   name: Show fail2ban status
+          debug:
+            var: f2b_status.stdout_lines
+
+-   name: Stage 6 - HTTP/HTTPS smoke
+    hosts: site
+    gather_facts: false
+    remote_user: root
+    tasks:
+      -   name: HTTP probe (80)
+          uri:
+            url: "http://{{ domain_name }}/"
+            status_code: [ 200, 301, 302, 308, 404 ]
+            validate_certs: false
+            timeout: 10
+          register: http_probe
+          failed_when: false
+
+      -   name: HTTPS probe (443)
+          uri:
+            url: "https://{{ domain_name }}/"
+            status_code: [ 200, 301, 302, 308, 404 ]
+            validate_certs: false
+            timeout: 10
+          register: https_probe
+          failed_when: false
+
+      -   name: Show HTTP/HTTPS probe results
+          debug:
+            msg:
+              - "HTTP {{ http_probe.status | default('FAIL') }}"
+              - "HTTPS {{ https_probe.status | default('not configured / FAIL') }}"
