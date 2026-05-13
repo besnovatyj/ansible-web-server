@@ -7,10 +7,9 @@
 ##########################################################
 # Публичный маппинг vault-переменных
 # Сами зашифрованные значения хранятся в group_vars/all/secrets.vault
-# (перенесём туда в шаге C7).
 ##########################################################
 
-# vault_ssh_key_passphrase уже маппится в ssh.yml на ssh_key_passphrase — не дублируем здесь
+# vault_ssh_key_passphrase уже маппится в ssh.yml
 
 # Имена с суффиксом `_from_vault` — чтобы не конфликтовать с такими же ключами в
 # `webserver.yml` (`mysql_root_password: "{{ vault_mysql_root_password }}"`). Альтернатива

@@ -14,7 +14,7 @@ stage-0:  ## Локально: SSH-ключи + known_hosts
 stage-1:  ## ОС: apt, locales, swap, systemd
 	ansible-playbook -i inventory/hosts.yml playbooks/stage-1-server-base.yml
 
-stage-2:  ## Доступ: sudo user, ключи, journald, verify
+stage-2:  ## Доступ: sudo user, деплой ключей, journald, verify (тест SSH)
 	ansible-playbook -i inventory/hosts.yml playbooks/stage-2-server-access.yml
 
 stage-3:  ## Безопасность: UFW, sshd hardening, fail2ban
