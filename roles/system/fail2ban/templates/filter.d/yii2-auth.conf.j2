@@ -1,0 +1,6 @@
+# Для защиты от брутфорса PHP-приложений. Требует настройки логов в yii2 приложении/
+[Definition]
+failregex = ^.*\[client <HOST>\].*PHP message: Failed login attempt.*
+# failregex = ^%(__prefix_line)s.*\[pool www\] .* authentication failure for user .*$
+ignoreregex =
+
