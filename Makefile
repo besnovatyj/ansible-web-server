@@ -37,13 +37,13 @@ remote-test-security:
 # Команды шифрования
 # =============================================================================
 vault-encrypt: # Шифрует из файла в Ansible Vault
-	ansible-vault encrypt ./secrets/secrets.yml --output ./secrets/secrets.vault
+	ansible-vault encrypt ./group_vars/all/secrets.yml --output ./group_vars/all/secrets.vault
 vault-create: # Создание хранилища Ansible Vault
-	ansible-vault create ./secrets/secrets.vault
+	ansible-vault create ./group_vars/all/secrets.vault
 vault-edit: # Редактирование данных в хранилище Ansible Vault
-	ansible-vault edit ./secrets/secrets.vault
+	ansible-vault edit ./group_vars/all/secrets.vault
 vault-view: # Просмотр данных в хранилище Ansible Vault
-	ansible-vault view ./secrets/secrets.vault
+	ansible-vault view ./group_vars/all/secrets.vault
 
 # =============================================================================
 # Глобальные настройки перед работой с Ansible
