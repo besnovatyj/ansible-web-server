@@ -16,9 +16,9 @@
       "{{ web_root }}/{{ domain_name }}/pub/web/front/assets",
       "{{ web_root }}/{{ domain_name }}/pub/web/back/assets",
     ]
-    owner: "{{ ftp_user }}"
-    group: "{{ ftp_group }}"
-    mode: '7777'
+    owner: "www-data"
+    group: "www-data"
+    mode: '7777' # TODO Должно быть максимум `0755` (или `0775` с  правильной группой).
     recurse: yes
 
 - name: Copy db dump on server
