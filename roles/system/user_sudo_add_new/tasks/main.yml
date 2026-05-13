@@ -21,18 +21,3 @@
     name: "{{ new_user }}"
     groups: sudo
     append: yes
-
-- name: Ensure .ssh directory exists for new user
-  file:
-    path: "/home/{{ new_user }}/.ssh"
-    state: directory
-    mode: '0700'
-    owner: "{{ new_user }}"
-    group: "{{ new_user }}"
-
-- name: Copy public key to new user
-  authorized_key:
-    user: "{{ new_user }}"
-    key: "{{ lookup('file', ordinary_pubkey_path) }}"
-    state: present
-    manage_dir: yes  # автоматически создаёт .ssh

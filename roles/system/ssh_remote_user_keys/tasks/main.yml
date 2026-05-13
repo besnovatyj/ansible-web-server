@@ -12,4 +12,4 @@
     user: "{{ new_user }}"
     key: "{{ lookup('file', ordinary_pubkey_path) }}"
     state: present
-    manage_dir: yes
+    manage_dir: yes # автоматически создаёт .ssh
