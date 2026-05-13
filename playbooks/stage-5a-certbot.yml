@@ -1,5 +1,13 @@
 ##########################################################
+#
+# Цель: получить SSL-сертификаты Let's Encrypt и переписать конфиг Nginx на HTTPS.
+#
 # Stage 5a: Let's Encrypt сертификаты
+# 1) Устанавливает certbot + python3-certbot-nginx
+# 2) Получает сертификаты для всех доменов из `nginx_sites[*].server_name`
+# 3) Запускает `certbot --nginx --non-interactive --agree-tos -m {{ certbot_email }} -d ...` — Certbot сам редактирует Nginx
+# 4) Регистрирует cron (systemd) для `certbot renew`
+#
 # Запускать после Stage 4 и настройки DNS.
 ##########################################################
 ---

@@ -1,6 +1,15 @@
 ##########################################################
+#
+# **Цель**: Установка LEMP-стека.
+#
 # Stage 4: LEMP-стек
-# Redis, Memcached, MySQL, Nginx, PHP + очистка apt.
+# 1) Redis **с паролем** (`requirepass`)
+# 2) Memcached
+# 3) MySQL (install + secure + setup)
+# 4) Nginx (3 server block)
+# 5) PHP 8.4 + модули + FPM pool
+# 6) Очистка `apt_clean`
+#
 ##########################################################
 ---
 - name: Pre-flight checks for stage 4

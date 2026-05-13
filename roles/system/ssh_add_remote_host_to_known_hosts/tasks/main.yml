@@ -1,4 +1,8 @@
+##
+# Добавление ECDSA-отпечатка сервера в known_hosts
+#
 # Обновление known_hosts предотвращает MITM-атаки ("человек посередине")
+##
 ---
 # Удаление старой записи (аналог ssh-keygen -R)
 - name: Remove old host entry from known_hosts

@@ -1,9 +1,15 @@
 ##########################################################
+#
+#Цель: установить systemd-юниты для Yii2 queue workers.
+#
 # Stage 5b: Yii2 queue workers (systemd units)
+# 1) Копирует `yii-queue@.service`
+# 2) Включает количество workers по `queue_workers_count`
+# 3) Добавляет ресурсные лимиты (MemoryMax, CPUQuota)
+#
 # Юниты раскладываются на сервер в state=stopped, enabled=no.
 # Запуск — вручную после деплоя исходников приложения:
 #     systemctl enable --now yii-queue@1
-# TODO - нерабочая роль, нужна донастройка
 ##########################################################
 ---
 -   name: Stage 5b - Queue workers
