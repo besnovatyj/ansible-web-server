@@ -9,13 +9,24 @@ Ansible имеет проблемы с запуском команд при ау
 3) Проверка настроек веб-сервера
 4) Настройка доступа по ключу через passphrase
 
+> ⚠️ ЗАМЕЧАНИЕ: В Ansible 2.18+ есть `ansible_ssh_private_key_passphrase` / расширения community.crypto
+> Можно повторить мучения, может получиться перевести всю работу Ansible на SSH keys with passphrase.
+> Да ещё и не от root, а от sudo юзера.
+
 ---
 
 ### Общие замечания
 
-- Не настроен контроль Fail2Ban для ошибок аутентификации в приложении yii2
+- Не настроен контроль Fail2Ban для ошибок аутентификации в приложении yii2. **Можно ли через Monolog писать в syslog?**
+  Да, у Monolog есть готовый `Monolog\Handler\SyslogHandler` (через функцию PHP `openlog/syslog`) и
+  `Monolog\Handler\SyslogUdpHandler` (через `udp://`). На системе с journald `SyslogHandler` положит сообщения прямо в
+  `systemd-journald` под тегом, который укажешь. **Как настроить в Yii2:** в `common/config/main.php` добавляешь
+  канал `auth` с `SyslogHandler` (`ident: yii2-auth`, `facility: LOG_AUTH`, `level: NOTICE`). В контроллере
+  `SiteController::actionLogin` или в `User::onAfterLogin` отправляешь сообщение
+  `"Failed login from {ip} for {username}"` или `"Successful login from {ip} for {username}"`.
+  Дальше — фильтр fail2ban с regex по этой строке.
 - AppArmor работает в режиме `complain`. Подробнее в отдельном файле [AppArmor.md](AppArmor.md)
-- Разобраться с лимитами на загрузку файлов. PHP: `upload_max_filesize`; Nginx: `client_max_body_size`. Загрузка нужна
+- Лимиты на загрузку файлов. Разобраться. PHP: `upload_max_filesize`; Nginx: `client_max_body_size`. Загрузка нужна
   пока что только в админке.
 - MySQL: что за логи `general_log` и `binlog`? Вкл иил выкл? Общие логи в syslog нужны, текстовые логи отключаем.
 - Redis конфиг. Можно как-то оптимизировать конфигурирование? Должен быть способ задания логов безопасных при
@@ -32,8 +43,6 @@ Ansible имеет проблемы с запуском команд при ау
 ---
 
 ### Claude замечания. Мой анализ.
-
-
 
 
 
