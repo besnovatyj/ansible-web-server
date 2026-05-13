@@ -1,0 +1,11 @@
+##########################################################
+# Stage 5c: data_transfer (РЕЗЕРВ, не используется по умолчанию)
+# Деплой исходников через rsync + импорт MySQL-дампа.
+# В Makefile не входит в full-deploy.
+##########################################################
+---
+-   name: Stage 5c - Data transfer (RESERVE)
+    hosts: site
+    remote_user: root
+    roles:
+      - ../roles/web-server/data_transfer
