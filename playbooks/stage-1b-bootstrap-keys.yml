@@ -1,0 +1,110 @@
+##########################################################
+#
+# **Цель**: Первичная доставка ключей и создание пользователей.
+#
+# Stage 1b: bootstrap (ЕДИНСТВЕННЫЙ плейбук, ходящий по ПАРОЛЮ root)
+#
+#   1) Pre-flight (localhost): vault_root_password задан и не пуст.
+#   2) Detect: пробуем зайти automation-ключом. Если уже можем —
+#      bootstrap не нужен (повторный/идемпотентный прогон).
+#   3) Bootstrap по паролю root (только если нужно):
+#      - users_provision: создаёт всех server_users (+ sudo, + пароли);
+#      - ssh_push_keys:  раскладывает публичные ключи (+ emergency root).
+#   4) Verify: automation-вход по ключу работает.
+#
+# После этого парольный доступ Ansible больше НЕ нужен — все остальные
+# стадии ходят automation-пользователем по ключу (см. inventory/hosts.yml).
+#
+# Запускать ПЕРВЫМ среди remote-стадий (сразу после stage-0).
+# Требует `sshpass` на контроллере (парольная аутентификация SSH).
+##########################################################
+---
+- name: Pre-flight checks for stage 1b
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Assert vault_root_password is defined and non-empty
+      assert:
+        that:
+          - vault_root_password is defined
+          - vault_root_password | length > 0
+        fail_msg: >-
+          vault_root_password не задан — bootstrap по паролю невозможен.
+          Заполни secrets/secrets.yml и зашифруй в group_vars/all/secrets.vault.
+
+    - name: Assert ssh_automation_user is present in server_users with type automation
+      assert:
+        that:
+          - server_users | selectattr('name', 'equalto', ssh_automation_user)
+              | selectattr('type', 'equalto', 'automation') | list | length == 1
+        fail_msg: >-
+          ssh_automation_user ({{ ssh_automation_user }}) должен присутствовать
+          в server_users ровно один раз с type: automation.
+
+- name: Detect connectivity mode
+  hosts: site
+  gather_facts: false
+  tasks:
+    - name: Probe key-based login as automation user
+      delegate_to: localhost
+      command: >-
+        ssh -i {{ automation_key_path }}
+            -o BatchMode=yes
+            -o ConnectTimeout=8
+            -o StrictHostKeyChecking=accept-new
+            -p {{ target_ssh_port }}
+            {{ ssh_automation_user }}@{{ ansible_host }} true
+      register: key_probe
+      failed_when: false
+      changed_when: false
+
+    - name: Decide whether bootstrap is needed
+      set_fact:
+        bootstrap_needed: "{{ key_probe.rc != 0 }}"
+
+    - name: Report detected mode
+      debug:
+        msg: >-
+          {{ 'Automation-ключ НЕ работает → выполняю bootstrap по паролю root.'
+             if bootstrap_needed
+             else 'Automation-ключ уже работает → bootstrap пропущен (идемпотентно).' }}
+
+- name: Bootstrap users & keys over root password
+  hosts: site
+  gather_facts: false
+  # Парольное подключение root изолировано здесь (НЕ в инвентаре).
+  vars:
+    ansible_user: root
+    ansible_ssh_pass: "{{ vault_root_password }}"
+    ansible_ssh_private_key_file: ""
+    ansible_ssh_common_args: >-
+      -o PreferredAuthentications=password
+      -o PubkeyAuthentication=no
+      -o StrictHostKeyChecking=accept-new
+  tasks:
+    - name: Bootstrap (skipped when automation key already works)
+      when: bootstrap_needed | default(true)
+      block:
+        - name: Gather minimal facts (datetime etc.)
+          ansible.builtin.setup:
+            gather_subset:
+              - min
+
+        - name: Provision all server_users
+          include_role:
+            name: ../roles/system/users_provision
+
+        - name: Push public keys (+ emergency root)
+          include_role:
+            name: ../roles/system/ssh_push_keys
+
+- name: Verify automation key works after bootstrap
+  hosts: site
+  gather_facts: false
+  tasks:
+    - name: Verify automation user SSH login via its key
+      include_role:
+        name: ../roles/system/verify_ssh
+      vars:
+        verify_ssh_user: "{{ ssh_automation_user }}"
+        verify_ssh_key: "{{ automation_key_path }}"

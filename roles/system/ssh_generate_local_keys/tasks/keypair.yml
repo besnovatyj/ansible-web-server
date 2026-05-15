@@ -1,0 +1,81 @@
+##
+# Генерация ОДНОЙ пары ключей. Вход (vars):
+#   kp_label      — человекочитаемая метка (для debug)
+#   kp_path       — путь к приватному ключу (публичный = kp_path + ".pub")
+#   kp_passphrase — passphrase ("" = без passphrase)
+#
+# Логика идентична прежней (на пару ordinary/emergency), вынесена сюда ради
+# цикла по server_users.
+##
+---
+
+- name: "[{{ kp_label }}] Check if private key exists"
+  stat:
+    path: "{{ kp_path }}"
+  register: kp_private_key
+
+- name: "[{{ kp_label }}] Check if public key exists"
+  stat:
+    path: "{{ kp_path }}.pub"
+  register: kp_public_key
+
+- block:
+    - name: "[{{ kp_label }}] Backup private key if exists and force_key_regen is true"
+      copy:
+        src: "{{ kp_path }}"
+        dest: "{{ kp_path }}.{{ current_datetime }}.bak"
+    - name: "[{{ kp_label }}] Verify private key backup exists"
+      stat:
+        path: "{{ kp_path }}.{{ current_datetime }}.bak"
+      register: backup_private_stat
+      failed_when: not backup_private_stat.stat.exists
+  rescue:
+    - name: "[{{ kp_label }}] Fail if backup of private key fails"
+      fail:
+        msg: "Failed to create or verify backup of private key ({{ kp_label }})"
+  when: force_key_regen | bool and kp_private_key.stat.exists
+
+- block:
+    - name: "[{{ kp_label }}] Backup public key if exists and force_key_regen is true"
+      copy:
+        src: "{{ kp_path }}.pub"
+        dest: "{{ kp_path }}.pub.{{ current_datetime }}.bak"
+    - name: "[{{ kp_label }}] Verify public key backup exists"
+      stat:
+        path: "{{ kp_path }}.pub.{{ current_datetime }}.bak"
+      register: backup_public_stat
+      failed_when: not backup_public_stat.stat.exists
+  rescue:
+    - name: "[{{ kp_label }}] Fail if backup of public key fails"
+      fail:
+        msg: "Failed to create or verify backup of public key ({{ kp_label }})"
+  when: force_key_regen | bool and kp_public_key.stat.exists
+
+- name: "[{{ kp_label }}] Generate SSH keypair (only if not exists or force_key_regen)"
+  community.crypto.openssh_keypair:
+    path: "{{ kp_path }}"
+    type: "{{ ssh_key_type }}"  # ed25519 или rsa
+    size: "{{ ssh_key_size }}"  # 0 для ed25519, 4096 для rsa
+    passphrase: "{{ kp_passphrase }}"  # "" = без passphrase (automation); из vault — human/emergency
+    force: "{{ force_key_regen | default(false) }}"  # Перезаписывать только если force=true
+    state: present
+  when:
+    # Генерация ключей выполняется, если хотя бы один из ключей (приватный или публичный) не существует.
+    # Это позволяет создать новую пару ключей, если один из файлов отсутствует
+    # (например, если есть только приватный ключ, но нет публичного).
+    - not kp_private_key.stat.exists | default(false) or not kp_public_key.stat.exists | default(false) or
+      (force_key_regen | bool and (backup_private_stat.stat.exists | default(false)) and (backup_public_stat.stat.exists | default(false)))
+    # Если вы хотите быть более строгими и генерировать ключи только в случае,
+    # когда оба ключа отсутствуют (а не хотя бы один), можно изменить условие следующим образом:
+    #- not (kp_private_key.stat.exists | default(false) and kp_public_key.stat.exists | default(false)) or
+    #  (force_key_regen | bool and (backup_private_stat.stat.exists | default(false)) and (backup_public_stat.stat.exists | default(false)))
+
+- name: "[{{ kp_label }}] Debug key and backup status"
+  debug: # При желании можно вывести ещё и путь к файлам ключей
+    msg: |
+      Key: {{ kp_label }}
+      Private key exists: {{ kp_private_key.stat.exists | default(false) }}
+      Public key exists: {{ kp_public_key.stat.exists | default(false) }}
+      Private key backup exists: {{ backup_private_stat.stat.exists | default(false) }}
+      Public key backup exists: {{ backup_public_stat.stat.exists | default(false) }}
+      Keys directory: {{ local_ssh_keys_dir }}

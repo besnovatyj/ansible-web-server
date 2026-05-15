@@ -1,0 +1,59 @@
+##
+# Провижининг ВСЕХ аккаунтов из server_users.
+#
+# Запускается из stage-1b-bootstrap-keys.yml под root (по паролю — единственный
+# раз). Идемпотентна, безопасна к повторному прогону.
+#
+# Политика (см. 000-ANALYSIS.md §2, §5.3):
+#   type: automation  → пароль `!` (locked), sudo NOPASSWD (drop-in sudoers)
+#   type: human       → UNIX-пароль из vault (для console/recovery/sudo),
+#                        членство в sudo, sudo С паролем (без NOPASSWD)
+#
+# update_password: on_create — повторный прогон НЕ перетирает пароль,
+# изменённый руками на сервере.
+##
+---
+
+- name: Create user
+  ansible.builtin.user:
+    name: "{{ su.name }}"
+    state: present
+    shell: /bin/bash
+    create_home: true
+    groups: "{{ su.groups | default(['sudo']) }}"
+    append: true
+    # automation → недоступный пароль; human → хэш из vault.
+    password: >-
+      {{ '!' if su.type == 'automation'
+         else (lookup('vars', su.unix_password_vault_key) | password_hash('sha512')) }}
+    update_password: "{{ 'always' if su.type == 'automation' else 'on_create' }}"
+  loop: "{{ server_users }}"
+  loop_control:
+    loop_var: su
+    label: "{{ su.name }} ({{ su.type }})"
+
+# sudo NOPASSWD — только для automation, через валидируемый drop-in.
+- name: Configure passwordless sudo (automation users)
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ su.name }}"
+    content: "{{ su.name }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  loop: "{{ server_users | selectattr('sudo', 'equalto', 'nopasswd') | list }}"
+  loop_control:
+    loop_var: su
+    label: "{{ su.name }}"
+
+# Для sudo-с-паролем убираем возможный устаревший NOPASSWD drop-in (на случай
+# смены политики человеку с nopasswd на password). Членство в sudo уже задано
+# в задаче Create user (groups).
+- name: Ensure no NOPASSWD drop-in for password-sudo users
+  ansible.builtin.file:
+    path: "/etc/sudoers.d/{{ su.name }}"
+    state: absent
+  loop: "{{ server_users | selectattr('sudo', 'equalto', 'password') | list }}"
+  loop_control:
+    loop_var: su
+    label: "{{ su.name }}"
