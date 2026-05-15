@@ -1,13 +1,13 @@
 ##########################################################
 #
-# **Цель**: Настройка пользовательского доступа. **Без отключения пароля!**
+# **Цель**: Доводка доступа после bootstrap. **Без отключения пароля!**
 #
 # Stage 2: настройка пользовательского доступа
-# 1) Создание sudo-пользователя
-# 2) Деплой emergency-ключа на root
-# 3) Деплой обычного ключа на sudo-пользователя
-# 4) Перенаправление SSH-логов в journald
-# 5) Verify SSH-входа для root и для new_user
+#   1) Перенаправление SSH-логов в journald
+#   2) Verify SSH-входа: root (emergency-ключ) + каждый server_user (свой ключ)
+#
+# Создание пользователей и доставка ключей выполнены в stage-1b (bootstrap).
+# Подключаемся automation-пользователем по ключу (sudo NOPASSWD).
 #
 # ВНИМАНИЕ: пароль НЕ отключается, hardening — в Stage 3.
 ##########################################################
@@ -16,20 +16,18 @@
   hosts: site
   gather_facts: false
   tasks:
-    - name: Assert new_user is set
+    - name: Assert server_users is set
       assert:
         that:
-          - new_user is defined and new_user | length > 0
-        fail_msg: "new_user is not set. Check group_vars/all/ssh.yml."
+          - server_users is defined and server_users | length > 0
+        fail_msg: "server_users не задан. Проверь group_vars/all/ssh.yml."
 
 - name: Stage 2 - User access setup
   hosts: site
-  remote_user: root
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
   gather_facts: true
   roles:
-    - ../roles/system/user_sudo_add_new
-    - ../roles/system/ssh_remote_root_keys      # emergency на root
-    - ../roles/system/ssh_remote_user_keys      # ordinary на new_user (F2)
     - ../roles/system/ssh_logs_journald
 
   post_tasks:
@@ -40,9 +38,13 @@
         verify_ssh_user: root
         verify_ssh_key: "{{ emergency_key_path }}"
 
-    - name: Verify new_user SSH login via ordinary key
+    - name: Verify each server_user SSH login via its own key
       include_role:
         name: ../roles/system/verify_ssh
       vars:
-        verify_ssh_user: "{{ new_user }}"
-        verify_ssh_key: "{{ ordinary_key_path }}"
+        verify_ssh_user: "{{ su.name }}"
+        verify_ssh_key: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
+      loop: "{{ server_users }}"
+      loop_control:
+        loop_var: su
+        label: "{{ su.name }} ({{ su.type }})"

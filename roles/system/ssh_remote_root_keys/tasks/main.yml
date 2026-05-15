@@ -1,4 +1,9 @@
 ---
+##
+# DEPRECATED (2026-05-15): emergency-ключ root теперь раскладывает роль
+# `ssh_push_keys` (stage-1b-bootstrap-keys.yml). Роль больше не подключается,
+# оставлена как история. Можешь удалить каталог после проверки нового pipeline.
+##
 - name: Ensure .ssh directory exists for target user
   file:
     path: "/root/.ssh"

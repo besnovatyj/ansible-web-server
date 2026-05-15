@@ -6,85 +6,37 @@
     remote_src: yes
     mode: '0600'
 
-# LogLevel VERBOSE в OpenSSH записывает подробную информацию о каждом SSH-соединении, включая аутентификацию, используемые криптографические алгоритмы и начало/окончание сессий.
-- name: Enable verbose SSH logging
-  lineinfile:
+# Маленький нюанс для цикла ниже: Если в вашем sshd_config есть блоки Match (например, Match User backup),
+# lineinfile может добавить новые строки в конец файла, то есть внутрь этого блока, что изменит их логику.
+# Если блоков Match нет — схема с циклом ниже рабочая.
+- name: Hardening SSH configuration
+  ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
-    regexp: '^#?LogLevel'
-    line: 'LogLevel VERBOSE'
+    regexp: "^#?{{ item.key }}"
+    line: "{{ item.key }} {{ item.value }}"
     state: present
-  notify: Restart SSH
+    validate: '/usr/sbin/sshd -t -f %s'
+  loop:
+    # Аутентификация
+    - { key: 'PasswordAuthentication', value: 'no' } # Запрещает вход по паролю для всех пользователей. Вход только по ключам.
+    - { key: 'KbdInteractiveAuthentication', value: 'no' } # Для 2FA (Google Authenticator) или расширенного PAM. Если вы поставите `PasswordAuthentication no`, но оставите `KbdInteractiveAuthentication yes`, вы все равно сможете войти по обычному паролю, так как PAM запросит его через этот «интерактивный» интерфейс.
+    - { key: 'ChallengeResponseAuthentication', value: 'no' } # Это устаревшее название для `KbdInteractiveAuthentication`.
+    - { key: 'PubkeyAuthentication', value: 'yes' } # Включает вход по ключам.
+    - { key: 'PermitRootLogin', value: 'prohibit-password' } # Запрещает вход под root по SSH с помощью пароля. Оставляет возможность входа только по ключу!.
 
-# Запрещает вход под root по SSH с помощью пароля. Оставляет возможность входа по ключу.
-- name: Configure root SSH access (emergency only)
-  lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?PermitRootLogin'
-    line: 'PermitRootLogin prohibit-password'  # Только по ключу!
-    state: present
-  notify: Restart SSH
+    # Безопасность и логи
+    - { key: 'LogLevel', value: 'VERBOSE' } # LogLevel VERBOSE в OpenSSH записывает подробную информацию о каждом SSH-соединении, включая аутентификацию, используемые криптографические алгоритмы и начало/окончание сессий.
+    - { key: 'Protocol', value: '2' } # Устанавливает Protocol 2 (хотя в современных версиях OpenSSH это уже стандарт)
 
-# Запрещает вход по паролю для всех пользователей. Вход только по ключам.
-- name: Disable password authentication in SSH
-  lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?PasswordAuthentication'
-    line: 'PasswordAuthentication no'
-    state: present
-  notify: Restart SSH
+    # Криптография (Ciphers, MACs, Kex)
+    - { key: 'Ciphers', value: 'aes256-ctr,chacha20-poly1305@openssh.com' } # Настраивает безопасные алгоритмы шифрования
+    - { key: 'MACs', value: 'hmac-sha2-512,hmac-sha2-256' } # Настраивает безопасные MAC-алгоритмы
+    - { key: 'KexAlgorithms', value: 'curve25519-sha256,curve25519-sha256@libssh.org' } # Настраивает безопасные алгоритмы обмена ключами
+    - { key: 'HostKeyAlgorithms', value: 'ssh-ed25519,rsa-sha2-512,rsa-sha2-256' } # Настраивает безопасные алгоритмы хостовых ключей
 
-# Включает вход по ключам.
-- name: Enable PubkeyAuthentication
-  lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?PubkeyAuthentication'
-    line: 'PubkeyAuthentication yes'
-    state: present
-  notify: Restart SSH
-
-# Устанавливает Protocol 2 (хотя в современных версиях OpenSSH это уже стандарт)
-- name: Ensure SSH Protocol 2
-  lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?Protocol'
-    line: 'Protocol 2'
-    state: present
-  notify: Restart SSH
-
-# Настраивает безопасные алгоритмы шифрования
-- name: Configure secure ciphers
-  lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?Ciphers'
-    line: 'Ciphers aes256-ctr,chacha20-poly1305@openssh.com'
-    state: present
-  notify: Restart SSH
-
-# Настраивает безопасные MAC-алгоритмы
-- name: Configure secure MACs
-  lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?MACs'
-    line: 'MACs hmac-sha2-512,hmac-sha2-256'
-    state: present
-  notify: Restart SSH
-
-# Настраивает безопасные алгоритмы обмена ключами
-- name: Configure secure KexAlgorithms
-  lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?KexAlgorithms'
-    line: 'KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org'
-    state: present
-  notify: Restart SSH
-
-# Настраивает безопасные алгоритмы хостовых ключей
-- name: Configure secure HostKeyAlgorithms
-  lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?HostKeyAlgorithms'
-    line: 'HostKeyAlgorithms ssh-ed25519,rsa-sha2-512,rsa-sha2-256'
-    state: present
+    # Тайм-ауты (Подробное описание ниже)
+    - { key: 'ClientAliveInterval', value: '300' } # Период пинга
+    - { key: 'ClientAliveCountMax', value: '3' } # Количество попыток пинга
   notify: Restart SSH
 
 ########################################################################
@@ -96,22 +48,6 @@
 # ClientAliveInterval - период пинга
 # ClientAliveCountMax - количество попыток пинга
 ########################################################################
-
-- name: Configure client alive interval
-  lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?ClientAliveInterval'
-    line: 'ClientAliveInterval 300'
-    state: present
-  notify: Restart SSH
-
-- name: Set client alive count max
-  lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?ClientAliveCountMax'
-    line: 'ClientAliveCountMax 3'
-    state: present
-  notify: Restart SSH
 
 - name: Validate SSH configuration # Выдаст ошибку, если конфиг некорректен
   ansible.builtin.command: sshd -t

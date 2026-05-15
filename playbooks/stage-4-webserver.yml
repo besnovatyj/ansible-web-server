@@ -28,7 +28,8 @@
 
 - name: Stage 4 - LEMP stack installation
   hosts: site
-  remote_user: root
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
   gather_facts: true
   roles:
     - ../roles/web-server/redis
@@ -39,6 +40,7 @@
 
 - name: Stage 4 - Cleanup
   hosts: site
-  remote_user: root
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
   roles:
     - ../roles/system/apt_clean

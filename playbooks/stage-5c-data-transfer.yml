@@ -6,6 +6,7 @@
 ---
 -   name: Stage 5c - Data transfer (RESERVE)
     hosts: site
-    remote_user: root
+    remote_user: "{{ ssh_automation_user }}"
+    become: true
     roles:
       - ../roles/web-server/data_transfer

@@ -20,4 +20,12 @@ mysql_root_password_from_vault: "{{ vault_mysql_root_password }}"
 mysql_db_user_password_from_vault: "{{ vault_mysql_db_user_password }}"
 redis_password: "{{ vault_redis_password }}"
 # Сначала пароль, потом копирование ключей, потом уже без пароля. Чтобы автоматизировать копирование ключей, нужен пароль.
+# АКТУАЛЬНО: используется stage-1b-bootstrap-keys.yml (единственный плейбук,
+# ходящий по паролю root). Переменная НЕ «мёртвая» — assert на неё валиден.
 root_password: "{{ vault_root_password }}"
+
+# Пер-пользовательские vault-переменные (vault_user_<name>_password /
+# vault_user_<name>_passphrase) НЕ маппятся здесь намеренно: server_users
+# хранит их имена в unix_password_vault_key / key_passphrase_vault_key, а
+# роли читают значение динамически через lookup('vars', <имя>). Добавление
+# нового человека не требует правок этого файла.

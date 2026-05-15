@@ -9,6 +9,10 @@
 # 4) Лимиты journald
 #
 # UFW и fail2ban — в Stage 3, чтобы не мешать первой проверке ключей.
+#
+# Порядок: stage-0 → stage-1b (bootstrap) → ЭТОТ stage-1 → stage-2 → ...
+# Ключи уже разложены в stage-1b, поэтому подключаемся automation-пользователем
+# по ключу с эскалацией через sudo (NOPASSWD).
 ##########################################################
 ---
 - name: Pre-flight checks for stage 1
@@ -24,7 +28,11 @@
 
 - name: Stage 1 - OS base configuration
   hosts: site
-  remote_user: root # `become: true` намеренно убран — `remote_user: root` уже даёт нужные права. `become` относится к sudo-эскалации, под root она не нужна.
+  # ИСТОРИЯ (до перехода на automation-user): remote_user: root — `become: true`
+  # намеренно убран, root уже даёт нужные права. Теперь Ansible ходит
+  # automation-пользователем по ключу, поэтому нужна sudo-эскалация:
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
   gather_facts: true
   roles:
     - ../roles/system/apt_update

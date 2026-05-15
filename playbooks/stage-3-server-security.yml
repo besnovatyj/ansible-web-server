@@ -7,9 +7,11 @@
 # 2) `ufw` Фаервол
 # 3) `fail2ban` IPS (fail2ban sshd jail включать **после** проверки ключей)
 # 4) `ssh_remote_security` Отключение пароля, hardening ciphers/MACs/Kex
+#    (PermitRootLogin остаётся prohibit-password — root по ключу с passphrase)
 # 5) **post-check** Проверка что SSH по ключу всё ещё работает после hardening
 # 6) app_armor` (опционально) MAC-профили в режиме **complain** сначала
 #
+# Подключение automation-пользователем по ключу (sudo NOPASSWD).
 # Запускать ТОЛЬКО после успешного Stage 2.
 #
 ##########################################################
@@ -21,12 +23,13 @@
     - name: Assert essential variables
       assert:
         that:
-          - new_user is defined and new_user | length > 0
-        fail_msg: "new_user is not set"
+          - server_users is defined and server_users | length > 0
+        fail_msg: "server_users не задан"
 
 - name: Stage 3 - Security hardening
   hosts: site
-  remote_user: root
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
   gather_facts: true
 
   pre_tasks:
@@ -37,12 +40,16 @@
         verify_ssh_user: root
         verify_ssh_key: "{{ emergency_key_path }}"
 
-    - name: Pre-check new_user SSH login
+    - name: Pre-check each server_user SSH login
       include_role:
         name: ../roles/system/verify_ssh
       vars:
-        verify_ssh_user: "{{ new_user }}"
-        verify_ssh_key: "{{ ordinary_key_path }}"
+        verify_ssh_user: "{{ su.name }}"
+        verify_ssh_key: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
+      loop: "{{ server_users }}"
+      loop_control:
+        loop_var: su
+        label: "{{ su.name }} ({{ su.type }})"
 
   roles:
     - ../roles/system/ufw
@@ -56,16 +63,21 @@
         verify_ssh_user: root
         verify_ssh_key: "{{ emergency_key_path }}"
 
-    - name: Post-check new_user SSH login after sshd hardening
+    - name: Post-check each server_user SSH login after sshd hardening
       include_role:
         name: ../roles/system/verify_ssh
       vars:
-        verify_ssh_user: "{{ new_user }}"
-        verify_ssh_key: "{{ ordinary_key_path }}"
+        verify_ssh_user: "{{ su.name }}"
+        verify_ssh_key: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
+      loop: "{{ server_users }}"
+      loop_control:
+        loop_var: su
+        label: "{{ su.name }} ({{ su.type }})"
 
 - name: Stage 3 - Enable fail2ban (after SSH verification)
   hosts: site
-  remote_user: root
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
   roles:
     - ../roles/system/fail2ban
     # AppArmor (после фазы B4 — в complain mode) можно включать тут же или отдельно:

@@ -17,22 +17,73 @@ ssh_key_size: 0 # Для RSA указать `4096`. Для ed25519 длина ф
 target_ssh_port: 22 # TODO - лучше потом поменять порт по умолчанию для SSH
 # TODO Технически в Ansible 2.18+ есть `ansible_ssh_private_key_passphrase` / расширения community.crypto
 # Stages 0–6 работают БЕЗ passphrase. Vault-переменная зарезервирована за Stage 7.
+# ── УТОЧНЕНИЕ (см. 000-ANALYSIS.md §11) ───────────────────────────────────────
+# Факт: это ansible-core 2.19 (не 2.18), и оно работает только с `private_key`
+# (PEM в переменной), а НЕ с `private_key_file`. community.crypto к подключению
+# отношения не имеет. Архитектурное решение: Stage 7 удалён, automation-ключ
+# навсегда БЕЗ passphrase, passphrase остаётся только у human- и emergency-ключей
+# (ими Ansible не ходит). Комментарии выше оставлены как история решения.
+# ──────────────────────────────────────────────────────────────────────────────
+# Passphrase по умолчанию для ключей БЕЗ passphrase (automation).
 ssh_key_passphrase: ""
-stage7_ssh_key_passphrase: "{{ vault_ssh_key_passphrase | default('') }}"
+# Passphrase для emergency-ключа root (key_<domain>_emergency_root). Им Ansible
+# НЕ подключается — только человек руками в аварийной ситуации.
+emergency_key_passphrase: "{{ vault_ssh_key_passphrase | default('') }}"
 
 ############### Пути к ключам
 local_ssh_keys_dir: "{{ playbook_dir }}/../secrets/ssh" # Была домашняя директория -  "{{ local_home_path }}/.ssh"
 # ssh_keys_dir: "{{ ansible_env.HOME }}/.ssh" # ansible_env — это facts целевого хоста, а не контроллера
-ordinary_key_path: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}"
-ordinary_pubkey_path: "{{ ordinary_key_path }}.pub"
+# Соглашение об именах (как домены из domain_name):
+#   приватный ключ пользователя:  {{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ имя }}
+#   публичный:                    ...pub
+# emergency-ключ root — отдельной парой, c суффиксом _emergency_root.
 emergency_key_path: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_emergency_root"
 emergency_pubkey_path: "{{ emergency_key_path }}.pub"
 
 ############### Куда копируем
 target_host: "{{ hostvars[groups['site'][0]]['ansible_host'] }}"
 
-############### Подключение Ansible
-site_ansible_user: root
+##########################################################
+# «Доменоподобная» структура пользователей.
+#
+# ssh_automation_user — единственный аккаунт, под которым Ansible ходит на
+# сервер ПОСЛЕ bootstrap (по ключу БЕЗ passphrase, sudo NOPASSWD).
+# Должен присутствовать в server_users c type: automation.
+#
+# server_users — декларативный список ВСЕХ аккаунтов на сервере:
+#   name                     — имя UNIX-пользователя (и суффикс файла ключа)
+#   type: automation|human   — automation: ключ без passphrase, пароль `!`,
+#                               sudo NOPASSWD; human: личный ключ С passphrase,
+#                               UNIX-пароль есть (console/recovery), sudo с паролем
+#   sudo: nopasswd|password  — режим sudo
+#   groups                   — доп. группы (обычно [sudo])
+#   unix_password_vault_key  — (human) имя vault-переменной с UNIX-паролем
+#   key_passphrase_vault_key — (human) имя vault-переменной с passphrase ключа
+#
+# Добавить человека = +1 блок здесь + пара vault-переменных в secrets.yml.
+##########################################################
+ssh_automation_user: ansible
 
-############### Новый sudo пользователь вместо root
-new_user: "bes" # Укажите имя нового пользователя
+server_users:
+  - name: ansible
+    type: automation          # ключ без passphrase, пароль `!` (password locked), sudo NOPASSWD
+    sudo: nopasswd
+    groups: [sudo]
+
+  - name: bes
+    type: human               # личный ключ с passphrase, пароль в /etc/shadow, sudo с паролем
+    sudo: password
+    groups: [sudo]
+    unix_password_vault_key: vault_user_bes_password
+    key_passphrase_vault_key: vault_user_bes_passphrase
+
+  # Новый человек = +1 блок (как +1 домен) + vault_user_<name>_* в secrets.yml:
+  # - name: ops
+  #   type: human
+  #   sudo: password
+  #   groups: [sudo]
+  #   unix_password_vault_key: vault_user_ops_password
+  #   key_passphrase_vault_key: vault_user_ops_passphrase
+
+# Приватный ключ, которым Ansible подключается после bootstrap (см. hosts.yml).
+automation_key_path: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ ssh_automation_user }}"

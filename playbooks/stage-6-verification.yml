@@ -17,7 +17,8 @@
 -   name: Stage 6 - Verify SSH access
     hosts: site
     gather_facts: false
-    remote_user: "{{ new_user }}"
+    remote_user: "{{ ssh_automation_user }}"
+    become: true
     tasks:
       -   name: Verify root SSH login via emergency key
           include_role:
@@ -26,16 +27,21 @@
             verify_ssh_user: root
             verify_ssh_key: "{{ emergency_key_path }}"
 
-      -   name: Verify new_user SSH login via ordinary key
+      -   name: Verify each server_user SSH login via its own key
           include_role:
             name: ../roles/system/verify_ssh
           vars:
-            verify_ssh_user: "{{ new_user }}"
-            verify_ssh_key: "{{ ordinary_key_path }}"
+            verify_ssh_user: "{{ su.name }}"
+            verify_ssh_key: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
+          loop: "{{ server_users }}"
+          loop_control:
+            loop_var: su
+            label: "{{ su.name }} ({{ su.type }})"
 
 -   name: Stage 6 - Verify services
     hosts: site
-    remote_user: root
+    remote_user: "{{ ssh_automation_user }}"
+    become: true
     gather_facts: true
     tasks:
       -   name: Check critical services are active
@@ -91,7 +97,8 @@
 -   name: Stage 6 - HTTP/HTTPS smoke
     hosts: site
     gather_facts: false
-    remote_user: root
+    remote_user: "{{ ssh_automation_user }}"
+    become: true
     tasks:
       -   name: HTTP probe (80)
           uri:

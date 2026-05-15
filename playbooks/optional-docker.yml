@@ -6,7 +6,8 @@
 ---
 -   name: Provision Site
     hosts: site
-    remote_user: root
+    remote_user: "{{ ssh_automation_user }}"
+    become: true
     tasks:
         -   name: Update apt packages
             apt:

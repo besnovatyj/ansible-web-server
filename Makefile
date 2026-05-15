@@ -11,6 +11,9 @@ SHELL := /bin/bash
 stage-0:  ## Локально: SSH-ключи + known_hosts
 	ansible-playbook -i inventory/hosts.yml playbooks/stage-0-local-init.yml
 
+stage-1b: ## Bootstrap: юзеры + ключи по паролю root (ЕДИНСТВЕННЫЙ заход по паролю; нужен sshpass)
+	ansible-playbook -i inventory/hosts.yml playbooks/stage-1b-bootstrap-keys.yml
+
 stage-1:  ## ОС: apt, locales, swap, systemd
 	ansible-playbook -i inventory/hosts.yml playbooks/stage-1-server-base.yml
 
@@ -35,16 +38,15 @@ stage-5c: ## (РЕЗЕРВ) data_transfer
 stage-6:  ## Verification
 	ansible-playbook -i inventory/hosts.yml playbooks/stage-6-verification.yml
 
-stage-7:  ## (опц.) Миграция ключей на passphrase
-	ansible-playbook -i inventory/hosts.yml playbooks/stage-7-key-hardening.yml
-
 docker-install: ## (РЕЗЕРВ) Установка Docker
 	ansible-playbook -i inventory/hosts.yml playbooks/optional-docker.yml
 
 # =============================================================================
 # Комбинированные цели
 # =============================================================================
-full-deploy: stage-0 stage-1 stage-2 stage-3 stage-4 stage-6
+# Порядок: bootstrap (stage-1b) — ПЕРВЫЙ remote-заход; после него Ansible
+# ходит automation-пользователем по ключу.
+full-deploy: stage-0 stage-1b stage-1 stage-2 stage-3 stage-4 stage-6
 
 # =============================================================================
 # Vault
@@ -63,7 +65,7 @@ vault-view: # Просмотр данных в хранилище Ansible Vault
 # =============================================================================
 init-ansible:
 	sudo apt update
-	sudo apt install -y ansible-core python3-pexpect nano
+	sudo apt install -y ansible-core python3-pexpect nano sshpass
 	sudo update-alternatives --set editor /bin/nano # Устанавливает nano редактором по-умолчанию для всей системы.
 
 galaxy-install:

@@ -19,6 +19,25 @@
           - groups['site'] | length > 0
         fail_msg: "Inventory file does not define group 'site'. Запустите с -i inventory/hosts.yml"
 
+    - name: Assert vault_root_password is set (нужен для stage-1b bootstrap)
+      assert:
+        that:
+          - vault_root_password is defined
+          - vault_root_password | length > 0
+        fail_msg: >-
+          vault_root_password не определён — без него stage-1b не доставит
+          ключи по паролю root. Заполни secrets/secrets.yml и зашифруй значения
+          в group_vars/all/secrets.vault (см. vault.yml).
+
+    - name: Assert ssh_automation_user is valid in server_users
+      assert:
+        that:
+          - server_users | selectattr('name', 'equalto', ssh_automation_user)
+              | selectattr('type', 'equalto', 'automation') | list | length == 1
+        fail_msg: >-
+          ssh_automation_user ({{ ssh_automation_user }}) должен быть в server_users
+          ровно один раз с type: automation. Проверь group_vars/all/ssh.yml.
+
 - name: Generate SSH keys and trust remote host
   hosts: localhost
   gather_facts: false
