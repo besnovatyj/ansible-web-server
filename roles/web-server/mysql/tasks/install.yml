@@ -1,5 +1,60 @@
 ---
-- name: Install MySQL
+# MySQL 8.4 LTS ставится из официального APT-репозитория Oracle:
+# Ubuntu 24.04 в своём apt отдаёт только 8.0, а нам нужен единый с dev 8.4 LTS.
+
+- name: Каталог для GPG-ключей APT
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: GPG-ключ репозитория MySQL (Oracle 2023)
+  get_url:
+    url: https://repo.mysql.com/RPM-GPG-KEY-mysql-2023
+    dest: /etc/apt/keyrings/mysql.asc
+    owner: root
+    group: root
+    mode: '0644'
+  register: mysql_gpg
+  until: mysql_gpg is success
+  retries: 5
+  delay: 10
+
+- name: APT-репозиторий MySQL 8.4 LTS
+  apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/mysql.asc] https://repo.mysql.com/apt/ubuntu {{ ansible_distribution_release }} mysql-8.4-lts mysql-tools"
+    filename: mysql
+    state: present
+    update_cache: yes
+
+- name: Утилита для неинтерактивного preseed debconf
+  apt:
+    name: debconf-utils
+    state: present
+
+# Неинтерактивная установка: пароль root и режим строгого шифрования (caching_sha2_password)
+# задаются заранее через debconf, иначе установщик Oracle спросит их интерактивно.
+- name: Preseed пароля root для mysql-community-server
+  debconf:
+    name: mysql-community-server
+    question: "{{ item }}"
+    vtype: password
+    value: "{{ mysql_root_password }}"
+  loop:
+    - mysql-community-server/root-pass
+    - mysql-community-server/re-root-pass
+  no_log: true
+
+- name: Preseed строгого шифрования паролей (caching_sha2_password)
+  debconf:
+    name: mysql-community-server
+    question: mysql-community-server/default-auth-override
+    vtype: select
+    value: "Use Strong Password Encryption (RECOMMENDED)"
+
+- name: Install MySQL 8.4 LTS
   apt:
     name: mysql-server
     state: present
@@ -9,12 +64,3 @@
   retries: 5       # Попробовать 5 раз
   delay: 10        # Ждать 10 секунд между попытками
   notify: Start MySQL on boot
-
-- name: Создание файла логов медленных запросов
-  file:
-    path: /var/log/mysql/slow-queries.log
-    owner: mysql
-    group: mysql
-    mode: 0640
-    state: touch
-  notify: Restart mysql

@@ -12,7 +12,8 @@
 bind-address = 127.0.0.1 # Прослушивание только localhost
 local-infile = 0 # Отключает функцию LOAD DATA LOCAL INFILE, которая позволяет загружать файлы с клиентской машины в базу данных. Это устраняет потенциальный вектор атаки, связанный с чтением файлов злоумышленником.
 sql_mode = STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
-default_authentication_plugin = mysql_native_password
+# default_authentication_plugin УДАЛЁН в MySQL 8.4 (с ним сервер не стартует).
+# По умолчанию используется caching_sha2_password — это и нужно (PHP 8.4/mysqlnd поддерживает).
 
 #
 # Логирование запросов, выполняющихся длительное время (только для отладки, используйте journald)

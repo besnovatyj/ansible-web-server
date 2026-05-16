@@ -5,21 +5,12 @@
     state: present
   when: ansible_os_family == 'Debian'
 
-- name: Проверка, является ли установка MySQL свежей
-  stat:
-    path: /var/lib/mysql/mysql # Создается при инициализации базы данных MySQL. Если каталог отсутствует, установка считается свежей.
-  register: mysql_data_dir
-  failed_when: false
-
-- name: Проверка возможности подключения к MySQL с паролем из Vault
-  command: mysql -u root -p"{{ mysql_root_password }}" -e "SELECT 1"
-  register: mysql_connect_check
-  failed_when: false
-  changed_when: false
-  no_log: true
-  when: mysql_data_dir.stat.exists  # Проверять подключение только если MySQL уже инициализирован
-
-- name: Установка пароля и плагина mysql_native_password для root@localhost
+# Oracle-пакет MySQL 8.4 через debconf (см. install.yml) задаёт пароль root
+# = mysql_root_password уже на первом запуске (caching_sha2_password, не auth_socket
+# и не пустой пароль). Поэтому прежняя ветка «свежая установка = пустой пароль»
+# больше не нужна: всегда подключаемся через unix-socket с известным паролем,
+# задача идемпотентна (повторный прогон ничего не меняет).
+- name: Установка пароля и плагина caching_sha2_password для root@localhost
   no_log: true
   mysql_user:
     name: root
@@ -28,12 +19,10 @@
     check_implicit_admin: true
     priv: "*.*:ALL,GRANT"
     state: present
-    plugin: mysql_native_password
-    login_unix_socket: /var/run/mysqld/mysqld.sock
-    # Для свежей установки используем пустой пароль или auth_socket
+    plugin: caching_sha2_password
     login_user: root
-    login_password: "{{ '' if not mysql_data_dir.stat.exists else mysql_root_password }}"
-  when: not mysql_data_dir.stat.exists or mysql_connect_check.rc != 0
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
   register: root_user_update
 
 - name: Ожидание запуска MySQL после установки пароля
