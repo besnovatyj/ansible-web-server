@@ -46,14 +46,29 @@
     mode: 0644
   notify: reload fail2ban
 
-- name: Create PHP-FPM filter
+- name: Create yii2-auth filter
   template:
-    src: filter.d/php-fpm.conf.j2
-    dest: /etc/fail2ban/filter.d/php-fpm.conf
+    src: filter.d/yii2-auth.conf.j2
+    dest: /etc/fail2ban/filter.d/yii2-auth.conf
     owner: root
     group: root
     mode: 0644
   notify: reload fail2ban
+
+# ВНИМАНИЕ: шаблон filter.d/php-fpm.conf.j2 в роли отсутствует — задача ниже
+# падала на этапе template и ломала весь прогон роли (включая yii2-auth).
+# Jail [php-fpm] в jail.local использует `filter = php-fpm`, а это штатный
+# фильтр, который fail2ban уже поставляет в /etc/fail2ban/filter.d/php-fpm.conf
+# (см. filter.d/0-readme.md). Своя копия не нужна. Раскомментировать только
+# если действительно появится кастомный шаблон filter.d/php-fpm.conf.j2.
+#- name: Create PHP-FPM filter
+#  template:
+#    src: filter.d/php-fpm.conf.j2
+#    dest: /etc/fail2ban/filter.d/php-fpm.conf
+#    owner: root
+#    group: root
+#    mode: 0644
+#  notify: reload fail2ban
 
 - name: Ensure fail2ban starts on a fresh reboot
   service: name=fail2ban state=started enabled=yes

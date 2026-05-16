@@ -1,6 +1,25 @@
-# Для защиты от брутфорса PHP-приложений. Требует настройки логов в yii2 приложении/
-[Definition]
-failregex = ^.*\[client <HOST>\].*PHP message: Failed login attempt.*
-# failregex = ^%(__prefix_line)s.*\[pool www\] .* authentication failure for user .*$
-ignoreregex =
+# fail2ban фильтр для jail [yii2-auth] — защита от брутфорса входа в приложение.
+#
+# Источник строки: modules\user\services\auth\AuthService::auth() на неуспешный
+# вход пишет Yii::warning() в канал логирования 'auth'
+# (app/common/config/log.php), который через Monolog SyslogHandler
+# (ident: yii2-auth, facility: LOG_AUTH) уходит в syslog/journald.
+#
+# Формат сообщения (дефолтный Monolog LineFormatter, канал 'auth'):
+#   [<datetime>] auth.WARNING: Failed login from <ip> for <username> [] []
+# Успешный вход логируется как "Successful login from ..." и НАМЕРЕННО НЕ
+# матчится — учитываются только неуспешные попытки.
+#
+# ВАЖНО: <HOST> — это значение Yii::$app->request->userIP. За обратным прокси
+# (traefik/nginx) это будет IP прокси, если в компоненте `request` не настроены
+# trustedHosts/ipHeaders (X-Forwarded-For). Иначе fail2ban забанит прокси.
+#
+# Backend — systemd (см. jail.local): время события fail2ban берёт из journald,
+# поэтому datepattern в фильтре не задаём (строку реконструирует backend как
+# "<host> <ident>[<pid>]: <message>", даты в её начале нет).
 
+[Definition]
+
+failregex = ^.*\bauth\.[A-Z]+: Failed login from <HOST> for \S.*$
+
+ignoreregex =
