@@ -57,7 +57,7 @@ server {
 server {
    listen 80;
    charset utf-8;
-   client_max_body_size 750M;
+   client_max_body_size 700M;
    sendfile off;
    server_tokens off; # отключить отображение версии в сообщениях об ошибках и заголовке ответа
 
@@ -104,7 +104,7 @@ server {
 server {
    listen 80;
    charset utf-8;
-   client_max_body_size 1024M;
+   client_max_body_size 1M; // На всякий случай, хотя глобально в http {} уже порезано до 1M
    sendfile on;
    server_tokens off; # отключить отображение версии в сообщениях об ошибках и заголовке ответа
 

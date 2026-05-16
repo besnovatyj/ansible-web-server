@@ -72,15 +72,15 @@ nginx_sites:
   - name: frontend
     server_name: "{{ domain_name }} www.{{ domain_name }}"
     web_root: "{{ web_root }}/{{ domain_name }}/app/frontend/pub"
-    client_max_body_size: 10M
+    client_max_body_size: 10M # На всякий случай, вдруг вложение к письму потом разрешим
     php_fpm: true
   - name: backend
     server_name: "adm.{{ domain_name }} www.adm.{{ domain_name }}"
     web_root: "{{ web_root }}/{{ domain_name }}/app/backend/pub"
-    client_max_body_size: 750M
+    client_max_body_size: 700M # Загружаем только в админке, здесь самый большой лимит
     php_fpm: true
   - name: static
     server_name: "files.{{ domain_name }} www.files.{{ domain_name }}"
     web_root: "{{ web_root }}/{{ domain_name }}/app/static"
-    client_max_body_size: 1024M
+    client_max_body_size: 1M # Просто ограничение, здесь нет PHP и скриптов, только отдаёт статику
     php_fpm: false

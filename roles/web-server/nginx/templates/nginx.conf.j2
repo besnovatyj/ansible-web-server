@@ -16,6 +16,7 @@ http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
     sendfile on;
+    client_max_body_size 1m; // Глобально всё ограничим, потом у конкретного server переопределим
     keepalive_timeout 65;
     server_tokens off;  # Скрыть версию Nginx для безопасности
     include /etc/nginx/conf.d/*.conf;
