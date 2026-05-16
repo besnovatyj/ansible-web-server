@@ -35,3 +35,30 @@
     become: true
     roles:
       - ../roles/web-server/certbot
+
+# Post-conditions: сертификат выпущен и certbot не сломал конфиг nginx
+# (он редактирует /etc/nginx сам — обязательно перепроверяем). См. TODO/000-PLAN.MD.
+-   name: Stage 5a - Post-checks
+    hosts: site
+    remote_user: "{{ ssh_automation_user }}"
+    become: true
+    gather_facts: false
+    tasks:
+      -   name: Stat Let's Encrypt fullchain
+          ansible.builtin.stat:
+            path: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+          register: le_fullchain
+
+      -   name: Assert certificate exists
+          assert:
+            that:
+              - le_fullchain.stat.exists
+            fail_msg: >-
+              Сертификат /etc/letsencrypt/live/{{ domain_name }}/fullchain.pem
+              не найден — certbot не выпустил сертификат.
+
+      -   name: Validate nginx config after certbot rewrite
+          command: nginx -t
+          register: nginx_t
+          changed_when: false
+          failed_when: nginx_t.rc != 0

@@ -44,3 +44,51 @@
   roles:
     - ../roles/system/ssh_generate_local_keys
     - ../roles/system/ssh_add_remote_host_to_known_hosts
+
+# Post-conditions: ключи реально созданы с правильными правами (см. TODO/000-PLAN.MD).
+# Приватный — 0600, публичный — 0644. Проверяются ключи всех server_users
+# (включая automation) + аварийная пара root.
+- name: Stage 0 - Post-checks (keys exist with correct perms)
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Build expected key path list (path + ожидаемый mode)
+      set_fact:
+        ssh_key_specs: >-
+          {{ ssh_key_specs | default([])
+             + [ {'path': base, 'mode': '0600'},
+                 {'path': base ~ '.pub', 'mode': '0644'} ] }}
+      loop: "{{ server_users }}"
+      loop_control:
+        loop_var: su
+        label: "{{ su.name }}"
+      vars:
+        base: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
+
+    - name: Add emergency root key pair to the list
+      set_fact:
+        ssh_key_specs: >-
+          {{ ssh_key_specs
+             + [ {'path': emergency_key_path,    'mode': '0600'},
+                 {'path': emergency_pubkey_path, 'mode': '0644'} ] }}
+
+    - name: Stat each expected key file
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      loop: "{{ ssh_key_specs }}"
+      loop_control:
+        label: "{{ item.path }}"
+      register: key_stats
+
+    - name: Assert each key exists with correct permissions
+      assert:
+        that:
+          - item.stat.exists
+          - item.stat.mode == item.item.mode
+        fail_msg: >-
+          {{ item.item.path }}: exists={{ item.stat.exists }},
+          mode={{ item.stat.mode | default('N/A') }},
+          ожидался {{ item.item.mode }}.
+      loop: "{{ key_stats.results }}"
+      loop_control:
+        label: "{{ item.item.path }}"

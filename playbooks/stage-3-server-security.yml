@@ -82,3 +82,22 @@
     - ../roles/system/fail2ban
     # AppArmor (после фазы B4 — в complain mode) можно включать тут же или отдельно:
     # - ../roles/system/app_armor
+
+  # Post-conditions: firewall и IPS реально подняты (см. TODO/000-PLAN.MD).
+  post_tasks:
+    - name: Get UFW status
+      command: ufw status
+      register: ufw_status
+      changed_when: false
+
+    - name: Assert UFW is active
+      assert:
+        that:
+          - "'Status: active' in ufw_status.stdout"
+        fail_msg: "UFW не активен. ufw status: {{ ufw_status.stdout }}"
+
+    - name: Assert fail2ban sshd jail is up
+      command: fail2ban-client status sshd
+      register: f2b_sshd
+      changed_when: false
+      failed_when: f2b_sshd.rc != 0

@@ -39,3 +39,43 @@
     - ../roles/system/locales_hostname_timezone
     - ../roles/system/swap
     - ../roles/system/systemd
+
+# Post-conditions: стадия реально достигла цели (см. TODO/000-PLAN.MD).
+- name: Stage 1 - Post-checks
+  hosts: site
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Get active swap
+      command: swapon --show=NAME --noheadings
+      register: swap_show
+      changed_when: false
+
+    - name: Assert swap is active
+      assert:
+        that:
+          - swap_show.stdout | trim | length > 0
+        fail_msg: "Swap не активен (swapon --show пуст). Проверь роль system/swap."
+
+    - name: Get system locale
+      command: localectl status
+      register: localectl_status
+      changed_when: false
+
+    - name: Assert locale is set
+      assert:
+        that:
+          - locale1 in localectl_status.stdout
+        fail_msg: "Системная локаль не содержит {{ locale1 }}. localectl: {{ localectl_status.stdout }}"
+
+    - name: Get configured timezone
+      command: timedatectl show -p Timezone --value
+      register: tz_value
+      changed_when: false
+
+    - name: Assert timezone is correct
+      assert:
+        that:
+          - tz_value.stdout | trim == time_zone
+        fail_msg: "Timezone = {{ tz_value.stdout | trim }}, ожидался {{ time_zone }}."

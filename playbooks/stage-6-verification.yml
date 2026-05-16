@@ -1,16 +1,21 @@
 ##########################################################
 #
-# **Цель**: Комплексная проверка всего сервера.
+# **Цель**: Комплексная проверка всего сервера. ГИБРИД: часть проверок
+# enforcing (валят прогон), часть — информативный отчёт.
 #
 # Stage 6: комплексная проверка сервера
-# - SSH: подключение root (аварийный ключ), подключение sudo user (обычный ключ)
-# - Сервисы: nginx, php-fpm, mysql, redis, memcached — status, listening ports
-# - Безопасность: UFW rules, fail2ban jails, sshd_config settings
-# - Web: HTTP response на порту 80 (и 443 если Certbot)
-# - PHP: `php -m` — все модули установлены, OPcache/APCu включены
+# ENFORCING (падает при провале):
+# - SSH: подключение root (аварийный ключ) и каждого server_user (свой ключ)
+# - Сервисы active: nginx, php-fpm, mysql, redis, memcached, ufw, fail2ban
+# - UFW active, fail2ban sshd jail поднят
+# - PHP: критичные модули загружены (Zend OPcache, apcu, redis, pdo_mysql, …)
+# REPORT (только вывод, не валит — намеренно):
+# - Листинг портов (ss), полный php -m, ufw/fail2ban status
+# - HTTP(80)/HTTPS(443) probe
 #
-# NB: Намеренно `failed_when: false` для HTTP/HTTPS — Stage 6 не должен падать на отсутствии
-# Certbot. Админ сам читает вывод. На 443 если 5xx и сертификата нет — это нормально, скрипт не падает.
+# NB: HTTP/HTTPS — `failed_when: false` НАМЕРЕННО: Stage 6 не должен падать на
+# отсутствии Certbot (до Stage 5a HTTPS нет, 5xx без серта — нормально).
+# Админ читает вывод сам.
 #
 ##########################################################
 ---
@@ -76,6 +81,19 @@
           debug:
             var: php_mods.stdout_lines
 
+      -   name: Assert critical PHP modules are loaded
+          assert:
+            that:
+              - item in php_mods.stdout
+            fail_msg: "PHP-модуль '{{ item }}' не загружен (нет в `php -m`)."
+          loop:
+            - Zend OPcache
+            - apcu
+            - redis
+            - pdo_mysql
+            - mbstring
+            - intl
+
       -   name: Check UFW status
           command: ufw status verbose
           register: ufw_status
@@ -85,14 +103,27 @@
           debug:
             var: ufw_status.stdout_lines
 
+      -   name: Assert UFW is active
+          assert:
+            that:
+              - "'Status: active' in ufw_status.stdout"
+            fail_msg: "UFW не активен."
+
       -   name: Check fail2ban-client status
           command: fail2ban-client status
           register: f2b_status
           changed_when: false
+          failed_when: f2b_status.rc != 0
 
       -   name: Show fail2ban status
           debug:
             var: f2b_status.stdout_lines
+
+      -   name: Assert fail2ban sshd jail is up
+          command: fail2ban-client status sshd
+          register: f2b_sshd
+          changed_when: false
+          failed_when: f2b_sshd.rc != 0
 
 -   name: Stage 6 - HTTP/HTTPS smoke
     hosts: site

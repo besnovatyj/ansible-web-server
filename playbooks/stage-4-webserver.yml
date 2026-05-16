@@ -44,3 +44,43 @@
   become: true
   roles:
     - ../roles/system/apt_clean
+
+# Post-conditions: LEMP реально поднят (см. TODO/000-PLAN.MD).
+# 443 здесь НЕ проверяем — HTTPS появляется только после Stage 5a.
+- name: Stage 4 - Post-checks
+  hosts: site
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Assert critical services are active
+      command: systemctl is-active {{ item }}
+      register: svc_status
+      changed_when: false
+      failed_when: svc_status.stdout != 'active'
+      loop:
+        - redis-server
+        - memcached
+        - mysql
+        - nginx
+        - "php{{ php_version }}-fpm"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Stat PHP-FPM unix socket
+      ansible.builtin.stat:
+        path: "/run/php/php{{ php_version }}-fpm.sock"
+      register: fpm_sock
+
+    - name: Assert PHP-FPM socket exists
+      assert:
+        that:
+          - fpm_sock.stat.exists
+        fail_msg: "PHP-FPM socket /run/php/php{{ php_version }}-fpm.sock отсутствует."
+
+    - name: Assert port 80 is listening
+      ansible.builtin.wait_for:
+        port: 80
+        host: 127.0.0.1
+        timeout: 5
+        state: started
