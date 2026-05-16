@@ -54,6 +54,9 @@ mysql_root_password: "{{ vault_mysql_root_password }}"
 
 # Список host-значений в mysql.user, которые root@<host> НЕ удаляются при secure_installation.
 # Всё остальное (включая '%' и FQDN сервера) удаляется.
+# DEPRECATED: используется только legacy-блоком в mysql/tasks/mysql_secure_installation.yml
+# (MySQL 8.4 на чистой установке создаёт только root@localhost). Удалить вместе с тем блоком
+# после проверки на проде.
 keep_mysql_root_hosts:
   - localhost
   - 127.0.0.1
@@ -84,3 +87,17 @@ nginx_sites:
     web_root: "{{ web_root }}/{{ domain_name }}/app/static"
     client_max_body_size: 1M # Просто ограничение, здесь нет PHP и скриптов, только отдаёт статику
     php_fpm: false
+
+##########################################################
+# YII2 QUEUE WORKERS (stage-5b-queue)
+##########################################################
+
+# Сколько systemd-воркеров yii-queue@N включить и запустить.
+queue_workers_count: 2
+
+# Ресурсный лимит RAM на ОДИН воркер. При превышении ядро OOM-killнет именно
+# этот воркер, не трогая nginx/mysql/php-fpm. Подбирать под профиль задач.
+queue_worker_memory_max: 256M
+
+# Ресурсный лимит CPU на ОДИН воркер. 50% = половина одного ядра.
+queue_worker_cpu_quota: 20%
