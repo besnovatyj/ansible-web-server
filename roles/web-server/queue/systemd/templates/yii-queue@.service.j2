@@ -9,9 +9,17 @@ Requires=redis.service
 [Service]
 User=www-data
 Group=www-data
-ExecStart=/usr/bin/php {{ item.web_root }}/{{ item.domain_name }}/yii queue/listen --verbose
+ExecStart=/usr/bin/php {{ web_root }}/{{ domain_name }}/yii queue/listen --verbose
 Restart=on-failure
+RestartSec=5s
+# Ресурсные лимиты на ОДИН воркер (cgroup этого юнита):
+# MemoryMax — жёсткий потолок RAM; при превышении ядро OOM-killнет именно этот
+#             воркер, не трогая nginx/mysql/php-fpm (важно на low-memory сервере,
+#             долгоживущий PHP queue/listen склонен подтекать по памяти).
+# CPUQuota  — потолок CPU (например 50% = половина одного ядра), чтобы горячий
+#             воркер не вытеснял веб-стек.
+MemoryMax={{ queue_worker_memory_max }}
+CPUQuota={{ queue_worker_cpu_quota }}
 
 [Install]
 WantedBy=multi-user.target
-

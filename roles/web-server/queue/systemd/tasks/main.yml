@@ -1,36 +1,23 @@
 ---
-- name: "Установка редис воркеров очереди Yii2"
-  template:
+# Предусловие: сервер настроен и исходники проекта уже задеплоены
+# (существует {{ web_root }}/{{ domain_name }}/yii и рабочий .env).
+# Плейбук запускается вручную ПОСЛЕ деплоя и полностью настраивает очереди.
+
+- name: Установить systemd-шаблон юнита Yii2 queue worker
+  ansible.builtin.template:
     src: yii-queue@.service.j2
     dest: /etc/systemd/system/yii-queue@.service
     owner: root
     group: root
     mode: 0644
-  with_items:
-    - domain_name: "{{ domain_name }}"
-      web_root: "{{ web_root }}"
+  notify: Restart yii-queue workers
 
-- name: Перечитать конфиги systemd (>=2.4)
+- name: Включить и запустить queue-воркеров (yii-queue@1 .. yii-queue@N)
   ansible.builtin.systemd_service:
-    daemon_reload: true
-
-- name: Запуск и автозагрузка юнитов yii-queue@* (Должны быть добавлены в автозагрузку как через - systemctl enable yii-queue@1 yii-queue@2)
-  ansible.builtin.systemd_service:
+    name: "yii-queue@{{ item }}"
     state: started
     enabled: true
-    name: "{{ item }}"
-  with_items:
-    - "yii-queue@1"
-    - "yii-queue@2"
-
--   name: Reload systemd
-    systemd:
-      daemon_reload: yes
-
--   name: Ensure units are stopped and disabled (will be enabled manually after first deploy)
-    systemd:
-      name: "yii-queue@{{ item }}"
-      state: stopped
-      enabled: no
-    loop: "{{ range(1, queue_workers_count + 1) | list }}"
-    ignore_errors: true  # юнит может ещё не существовать на первой итерации
+    daemon_reload: true
+  loop: "{{ range(1, queue_workers_count + 1) | list }}"
+  loop_control:
+    label: "yii-queue@{{ item }}"
