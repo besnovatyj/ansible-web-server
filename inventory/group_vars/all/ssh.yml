@@ -41,7 +41,10 @@ emergency_key_path: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_emergency_ro
 emergency_pubkey_path: "{{ emergency_key_path }}.pub"
 
 ############### Куда копируем
-target_host: "{{ hostvars[groups['site'][0]]['ansible_host'] }}"
+# То же значение, что host_ip (main.yml) — единый источник правды, чтобы не
+# дублировать выражение hostvars[groups['site'][0]]['ansible_host'].
+# Отдельное семантическое имя: «хост, к которому Ansible подключается по SSH».
+target_host: "{{ host_ip }}"
 
 ##########################################################
 # «Доменоподобная» структура пользователей.
