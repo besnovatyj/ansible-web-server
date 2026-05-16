@@ -43,7 +43,7 @@
     path: /etc/systemd/system/redis-server.service.d
     state: directory
     mode: 0755
-  notify: Reload systemd
+  notify: Restart redis
 
 - name: Configure redis to log to journald
   become: true
@@ -55,4 +55,4 @@
       StandardError=journal
       SyslogIdentifier=redis
     mode: 0644
-  notify: Reload systemd
+  notify: Restart redis

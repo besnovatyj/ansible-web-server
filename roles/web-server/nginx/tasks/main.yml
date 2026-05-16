@@ -64,11 +64,6 @@
     mode: 0644
   notify: Restart nginx
 
-# Перезагружаем конфигурацию systemd перед тестированием Nginx
-- name: Reload systemd daemon
-  ansible.builtin.systemd:
-    daemon_reload: yes
-
 - name: Test Nginx configuration
   ansible.builtin.command: nginx -t
   check_mode: no
