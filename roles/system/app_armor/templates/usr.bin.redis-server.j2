@@ -7,6 +7,8 @@
   capability dac_override,
 
   /etc/redis/redis.conf r,
+  /etc/redis/redis.conf.d/ r,
+  /etc/redis/redis.conf.d/** r,
   /var/lib/redis/** rwk,
   /var/log/redis/** rw,
   /run/redis/redis.sock rw,

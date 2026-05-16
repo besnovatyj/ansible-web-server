@@ -20,21 +20,38 @@
     group: redis
     mode: 0755
 
-- name: Create a directory "/etc/redis", if it does not exist
+- name: Create a directory "/etc/redis/redis.conf.d", if it does not exist
   become: true
   ansible.builtin.file:
-    path: /etc/redis
+    path: /etc/redis/redis.conf.d
     state: directory
+    owner: root
+    group: root
     mode: 0755
 
-- name: Ensure Redis Configuration
+# Наши настройки кладём отдельным drop-in файлом, дистрибутивный
+# /etc/redis/redis.conf не перетираем — он остаётся за пакетом.
+- name: Ensure Redis custom configuration (drop-in)
   become: true
-  template:
-    src: redis.conf.j2
-    dest: /etc/redis/redis.conf
+  ansible.builtin.template:
+    src: redis-custom.conf.j2
+    dest: /etc/redis/redis.conf.d/ansible-custom.conf
     owner: root
     group: root
     mode: 0644
+  notify: Restart redis
+
+# Подключаем drop-in ПОСЛЕДНЕЙ строкой дистрибутивного конфига, чтобы наши
+# значения перекрывали дефолты. Если apt upgrade подменит redis.conf —
+# blockinfile допишет include обратно при следующем прогоне (self-healing).
+- name: Include drop-in as the last line of /etc/redis/redis.conf
+  become: true
+  ansible.builtin.blockinfile:
+    path: /etc/redis/redis.conf
+    marker: "# {mark} ANSIBLE MANAGED BLOCK"
+    insertafter: EOF
+    block: |
+      include /etc/redis/redis.conf.d/ansible-custom.conf
   notify: Restart redis
 
 - name: Create redis systemd override directory
