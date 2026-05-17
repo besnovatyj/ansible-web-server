@@ -1,0 +1,18 @@
+# Управляется Ansible. Подключается из /etc/redis/redis.conf директивой
+# include ПОСЛЕДНЕЙ строкой, поэтому эти значения перекрывают дистрибутивные
+# дефолты (в Redis выигрывает последняя обработанная директива).
+# Дистрибутивный /etc/redis/redis.conf не трогаем — он остаётся за пакетом
+# и переживает apt upgrade как dpkg-conffile.
+bind 127.0.0.1
+protected-mode yes
+port 6379
+requirepass {{ redis_password }}
+maxmemory 128mb
+maxmemory-policy allkeys-lru
+# fail2ban ищет логи в systemd (Если параметр logfile не указан или установлен в "", Redis будет выводить логи в stdout.)
+logfile ""
+# debug, verbose, notice, warning
+loglevel warning
+supervised systemd
+dir /var/lib/redis
+dbfilename dump.rdb
