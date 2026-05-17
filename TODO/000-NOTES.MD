@@ -81,8 +81,7 @@
    Ansible, скорее ручная итерация.
 6) 🔥 ContentSecurityPolicy(CSP) [ContentSecurityPolicy.md](ContentSecurityPolicy(CSP).md)
 7) 🔥 Поменять порт SSH. Наверное, в том же плейбуке что отвечает за создание SSH keys с passphrase. То есть,
-   максимальная
-   защита сервера после того как больше не предвидится работа с Ansible.
+   максимальная защита сервера после того как больше не предвидится работа с Ansible.
 8) ✅ Certbot: не было проверки содержимого сертификата (rate-limit risk) — ИСПРАВЛЕНО.
 
    Было: идемпотентность держалась на `args.creates:
@@ -105,9 +104,10 @@
      ВАЖНО: staging-сертификат недоверенный — только для тестов.
 9) ✅ **Nginx rate limiting** Нет `limit_req_zone`, fail2ban обнаруживает, но не предотвращает.
    Пока не актуально, можно себя самого забанить из-за количества ресурсов на доменах фронта и админки.
+   `limit_req_zone $binary_remote_addr zone=one:10m rate=1r/s;`
 10) **Backup стратегия** Нет mysqldump, нет бэкапа конфигов, нет off-site хранения
 11) **Мониторинг** Нет алертинга, нет OOM-защиты (out of memory, особенно непонятно с opcache (смотри статью на Хабре)),
-    нет проверки диска
+    нет проверки диска. (https://habr.com/ru/companies/vk/articles/310054/)
 12) **Certbot**
     Добавлена роль Certbot, отвечающая за настройку HTTPS, но что она делает конкретно, пока не разбирался.
     Перейти на полное управление SSL-конфигами из Ansible. Certbot только получает сертификаты: `certbot certonly --nginx`
@@ -125,11 +125,85 @@
 
     Этот шаг можно отложить — если в Stage 5a будем использовать `certbot --nginx`, он сам
     правит конфиги.
+    Включи HSTS: `add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload";`.
 13) **Redis**
     Доставка пароля в приложение не осуществлена. Способ доставки пароля в приложение Yii2. Для контекста: типовой паттерн —
     `/etc/yii2/env` (root:www-data, 0640), подключаемый в `php-fpm` через директиву `env[REDIS_PASSWORD]` в `www.conf.j2`,
     либо использование `EnvironmentFile=` в systemd-юните для queue workers. Файл создаётся тем же Ansible-плейбуком,
     переживает перезапуски сервера естественным образом.
+14) 🔥🔥🔥 Сделать скорее всего получение приложением секретов через .env и АВТОМАТИЗИРОВАНТЬ ПРИ ПЕРЕЗАПУСКЕ СЕРВЕРА!!
+15) ✅ **Обновления и патчи (unattended-upgrades)** — РЕАЛИЗОВАНО.
+    Это критично, так как уязвимости в kernel или libs (например, CVE в glibc) могут привести к RCE (remote code
+    execution).
+
+    Обоснование (важно для модели «настроил и забыл на 3–5 лет»): для
+    неуправляемого сервера в интернете доминирующая угроза — компрометация
+    через непропатченный RCE (openssh/openssl/glibc/ядро), а НЕ поломка от
+    бэкпортнутого security-патча. На LTS security-pocket ABI-стабилен, dpkg
+    идёт с confold → конфиги не перетираются. Это решение СНИЖАЕТ риск, а не
+    повышает. (`unattended-upgrades` ≠ release-upgrade — последний здесь
+    отключён и не делается.)
+
+    Сделано: роль `roles/system/unattended_upgrades`, подключена в stage-3.
+    - Только `*-security` origins (`uu_security_only`, переопределяемо).
+    - Ночной авто-ребут: `uu_auto_reboot_time=04:00`, `WithUsers=true`
+      (фиксы ядра/glibc инертны без ребута; для fire-and-forget обязателен).
+    - Гигиена диска: `Remove-Unused-Kernel-Packages` (главная причина тихого
+      «загнивания» — забитый /boot валит apt).
+    - `apt-config dump` как пост-проверка (битый apt.conf.d молча ломает ВЕСЬ
+      apt → нет обновлений и нет apt вообще).
+    - Все размеры/режимы — переменные в `defaults/main.yml`.
+    - Enforcing Post-check в stage-3 (паттерн «post_tasks в конце стадии»):
+      `APT::Periodic::Unattended-Upgrade == "1"`, `apt-daily-upgrade.timer`
+      active, `unattended-upgrade --dry-run` rc 0 (end-to-end: конфиг
+      парсится, origins резолвятся).
+
+    ⚠️ ПРЕДУСЛОВИЕ ночного авто-ребута: ВСЕ сервисы должны быть `enabled` и
+    чисто подниматься после boot (nginx, php-fpm, mysql, redis, yii2-queue).
+    Иначе ночной ребут = тихий простой до звонка. Проверить отдельно:
+    `systemctl is-enabled nginx php*-fpm mysql redis-server <queue-unit>` +
+    один контрольный `reboot` после провижининга. (Связано с п.14 — секреты
+    должны переживать ребут естественно, через файл, не ENV сессии.)
+    Заметка: Ubuntu 24.04 ставит unattended-upgrades включённым по умолчанию
+    (security) — роль делает поведение явным и управляемым, а не «как повезёт».
+16) ⚠️ Операционная связка: при validate_timestamps=0 после деплоя кода обязателен рестарт php-fpm
+    (handler Restart PHP-FPM это делает) — иначе сервер вечно отдаёт старый код.
+    Это завязано на деплой-пайплайн (п.13/14), держи в голове.
+17) ✅ **Мониторинг / OOM-защита (п.11)** — РЕШЕНО без мониторинг-демона.
+
+    Важно: в п.11 смешаны ДВА разных «OOM». Системный OOM (ядро убивает
+    жадный процесс) ≠ OPcache SHM-исчерпание (свой сегмент opcache переполнен;
+    статья VK Habr 310054 — opcache НИКОГДА не освобождает память → лок-контеншн
+    и обвал перфоманса, НЕ краш). Лечатся по-разному.
+
+    Сделано:
+    - **2a. Авто-рестарт сервисов** — роль `roles/system/service_restart`,
+      подключена в stage-4 (после установки LEMP) + enforcing post-check.
+      systemd drop-in `10-restart.conf` (Restart=on-failure, RestartSec=5s,
+      поднятый StartLimitBurst) для nginx/php-fpm/mysql/redis/memcached.
+      Нулевой overhead. Если OOM-kill/краш убил сервис — поднимется сам за
+      секунды (главный fire-and-forget фикс; стыкуется со swap и ⚠-предусловием
+      п.15 про ночной ребут unattended-upgrades).
+    - **2b. OPcache sizing** (`opcache.ini`) — закрывает вопрос статьи:
+      memory_consumption 64→128, interned_strings_buffer 8→16,
+      max_accelerated_files 4000→10000, validate_timestamps=0 (оставлено).
+      Сегмент ОБЩИЙ для всех fpm-воркеров (не ×pm.max_children) → цена
+      ~+70МБ RAM однократно, не нагрузка. Связка с п.16 (рестарт после деплоя).
+
+    Отклонено осознанно:
+    - **SECURITY.md** (monit / check_ram.sh, рестарт php-fpm+mysql при
+      «free RAM < 200МБ / >90%») — УДАЛЁН. Лекарство хуже болезни: скрипт
+      берёт колонку `free`, а не `available` (в Linux почти вся RAM штатно
+      под page-cache) → срабатывает на здоровом сервере постоянно → monit
+      рестартит MySQL+php-fpm в цикле = рукотворный self-DoS. Рестарт MySQL
+      ради RAM деструктивен (рвёт транзакции, остужает buffer pool). monit =
+      лишний демон против «минимально/не нагружать/забыл на годы».
+
+    2c. Проверка диска — отдельная НЕ нужна: рост уже ограничен (journald
+    SystemMaxUse=100M, binlog expire 7д + max 100M, чистка ядер
+    unattended-upgrades). Скрипт-WARNING в журнал, который никто не читает,
+    для fire-and-forget бессмыслен; эффективный контроль = ограничивать рост
+    (сделано), а не мониторить в пустоту.
 
 
 
