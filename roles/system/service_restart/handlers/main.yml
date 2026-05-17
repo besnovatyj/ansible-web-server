@@ -1,0 +1,6 @@
+---
+# daemon-reload подхватывает drop-in'ы (политика применится к следующему
+# запуску/падению сервиса; перезапускать сами сервисы здесь НЕ нужно).
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true

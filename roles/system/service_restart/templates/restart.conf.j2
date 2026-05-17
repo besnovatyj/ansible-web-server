@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+# Управляется ролью roles/system/service_restart — не править вручную.
+# Авто-рестарт сервиса (в т.ч. после OOM-kill) для fire-and-forget сервера.
+[Unit]
+StartLimitIntervalSec={{ service_start_limit_interval_sec }}
+StartLimitBurst={{ service_start_limit_burst }}
+
+[Service]
+Restart={{ service_restart_policy }}
+RestartSec={{ service_restart_sec }}

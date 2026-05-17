@@ -1,0 +1,23 @@
+---
+# Авто-рестарт критичных сервисов через systemd drop-in.
+#
+# Зачем: на low-RAM сервере ядро может OOM-killнуть сервис (или он крашнется).
+# Для «настроил и забыл на годы» сервис ДОЛЖЕН подниматься сам за секунды, а не
+# лежать до звонка. Дистрибутивные unit-файлы непоследовательны (часть без
+# Restart=), поэтому задаём политику явно и единообразно. Нулевой overhead —
+# это только директивы systemd, без демонов и таймеров.
+
+service_restart_units:
+  - nginx
+  - mysql
+  - redis-server
+  - memcached
+  - "php{{ php_version }}-fpm"
+
+service_restart_policy: "on-failure"   # on-failure: рестарт при ненулевом коде/сигнале (вкл. OOM-kill)
+service_restart_sec: "5s"              # пауза перед рестартом
+
+# StartLimit: не «сдаваться» после нескольких быстрых падений (дефолт systemd
+# = 5 за 10с, после чего юнит остаётся мёртвым — для unmanaged-сервера плохо).
+service_start_limit_burst: 10
+service_start_limit_interval_sec: "60s"

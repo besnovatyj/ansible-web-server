@@ -1,0 +1,19 @@
+---
+- name: Ensure systemd drop-in directory per unit
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: "{{ service_restart_units }}"
+
+- name: Deploy auto-restart drop-in per unit
+  ansible.builtin.template:
+    src: restart.conf.j2
+    dest: "/etc/systemd/system/{{ item }}.service.d/10-restart.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ service_restart_units }}"
+  notify: Reload systemd daemon

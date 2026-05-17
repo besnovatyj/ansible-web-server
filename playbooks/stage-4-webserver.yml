@@ -37,6 +37,9 @@
     - ../roles/web-server/mysql
     - ../roles/web-server/nginx
     - ../roles/web-server/php
+    # Авто-рестарт критичных сервисов (fire-and-forget): ставится ПОСЛЕ того,
+    # как все сервисы установлены — drop-in'ы Restart=on-failure.
+    - ../roles/system/service_restart
 
 - name: Stage 4 - Cleanup
   hosts: site
@@ -84,3 +87,28 @@
         host: 127.0.0.1
         timeout: 5
         state: started
+
+    # service_restart: политика авто-рестарта реально применена к юнитам.
+    - name: Get Restart= policy per critical unit
+      command: systemctl show -p Restart --value {{ item }}
+      register: unit_restart
+      changed_when: false
+      loop:
+        - redis-server
+        - memcached
+        - mysql
+        - nginx
+        - "php{{ php_version }}-fpm"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Assert auto-restart is enabled on all critical units
+      assert:
+        that:
+          - item.stdout | trim == 'on-failure'
+        fail_msg: >-
+          {{ item.item }}: Restart={{ item.stdout | trim }} (ожидался on-failure).
+          drop-in роли service_restart не применился — проверь daemon-reload.
+      loop: "{{ unit_restart.results }}"
+      loop_control:
+        label: "{{ item.item }}"
