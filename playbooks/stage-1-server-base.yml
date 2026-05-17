@@ -40,7 +40,7 @@
     - ../roles/system/swap
     - ../roles/system/systemd
 
-# Post-conditions: стадия реально достигла цели (см. TODO/000-PLAN.MD).
+# Post-conditions: стадия реально достигла цели (см. TODO/000-NOTES.MD).
 - name: Stage 1 - Post-checks
   hosts: site
   remote_user: "{{ ssh_automation_user }}"

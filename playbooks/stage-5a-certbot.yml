@@ -39,7 +39,7 @@
       - ../roles/web-server/certbot
 
 # Post-conditions: сертификат выпущен и certbot не сломал конфиг nginx
-# (он редактирует /etc/nginx сам — обязательно перепроверяем). См. TODO/000-PLAN.MD.
+# (он редактирует /etc/nginx сам — обязательно перепроверяем). См. TODO/000-NOTES.MD.
 -   name: Stage 5a - Post-checks
     hosts: site
     remote_user: "{{ ssh_automation_user }}"

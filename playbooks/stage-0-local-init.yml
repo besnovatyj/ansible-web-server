@@ -45,7 +45,7 @@
     - ../roles/system/ssh_generate_local_keys
     - ../roles/system/ssh_add_remote_host_to_known_hosts
 
-# Post-conditions: ключи реально созданы с правильными правами (см. TODO/000-PLAN.MD).
+# Post-conditions: ключи реально созданы с правильными правами (см. TODO/000-NOTES.MD).
 # Приватный — 0600, публичный — 0644. Проверяются ключи всех server_users
 # (включая automation) + аварийная пара root.
 - name: Stage 0 - Post-checks (keys exist with correct perms)

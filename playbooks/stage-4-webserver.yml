@@ -45,7 +45,7 @@
   roles:
     - ../roles/system/apt_clean
 
-# Post-conditions: LEMP реально поднят (см. TODO/000-PLAN.MD).
+# Post-conditions: LEMP реально поднят (см. TODO/000-NOTES.MD).
 # 443 здесь НЕ проверяем — HTTPS появляется только после Stage 5a.
 - name: Stage 4 - Post-checks
   hosts: site
