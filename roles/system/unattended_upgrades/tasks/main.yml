@@ -1,0 +1,52 @@
+---
+- name: Assert host is Ubuntu
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution == 'Ubuntu'
+    fail_msg: >-
+      Роль рассчитана на Ubuntu (Allowed-Origins завязаны на ${distro_id}).
+      Обнаружено: {{ ansible_distribution }} {{ ansible_distribution_version }}.
+
+- name: Install unattended-upgrades
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# Конфиги — это conffile пакета unattended-upgrades. Сознательно владеем ими
+# (детерминированно, без двусмысленности порядка чтения apt.conf.d). На апгрейде
+# пакета dpkg оставит наши версии (confold), новый дефолт ляжет как .dpkg-dist.
+- name: Deploy 50unattended-upgrades
+  ansible.builtin.template:
+    src: 50unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Deploy 20auto-upgrades (APT::Periodic schedule)
+  ansible.builtin.template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+
+# Битый файл в apt.conf.d ломает ВЕСЬ apt (и сами обновления тоже) и молча —
+# для неуправляемого сервера это фатально. Дешёвая проверка: apt-config dump
+# падает при любой синтаксической ошибке в apt.conf.d.
+- name: Validate apt config parses
+  ansible.builtin.command:
+    cmd: apt-config dump
+  register: apt_config_dump
+  changed_when: false
+
+- name: Ensure APT periodic timers are enabled and running
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - apt-daily.timer            # apt update + download
+    - apt-daily-upgrade.timer    # запуск unattended-upgrade (+ ребут в окно)

@@ -1,0 +1,42 @@
+// {{ ansible_managed }}
+// Управляется ролью roles/system/unattended_upgrades — не править вручную,
+// все значения задаются переменными (см. defaults/main.yml).
+
+Unattended-Upgrade::Allowed-Origins {
+    "${distro_id}:${distro_codename}-security";
+    "${distro_id}ESMApps:${distro_codename}-apps-security";
+    "${distro_id}ESM:${distro_codename}-infra-security";
+{% if not uu_security_only %}
+    // uu_security_only=false → также обычные обновления (НЕ для fire-and-forget):
+    "${distro_id}:${distro_codename}-updates";
+{% endif %}
+};
+
+Unattended-Upgrade::Package-Blacklist {
+{% for pkg in uu_package_blacklist %}
+    "{{ pkg }}";
+{% endfor %}
+};
+
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "{{ uu_remove_unused_kernel_packages | ternary('true', 'false') }}";
+Unattended-Upgrade::Remove-New-Unused-Dependencies "{{ uu_remove_new_unused_dependencies | ternary('true', 'false') }}";
+Unattended-Upgrade::Remove-Unused-Dependencies "{{ uu_remove_unused_dependencies | ternary('true', 'false') }}";
+
+Unattended-Upgrade::MinimalSteps "{{ uu_minimal_steps | ternary('true', 'false') }}";
+Unattended-Upgrade::SyslogEnable "{{ uu_syslog_enable | ternary('true', 'false') }}";
+
+Unattended-Upgrade::Automatic-Reboot "{{ uu_auto_reboot | ternary('true', 'false') }}";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "{{ uu_auto_reboot_with_users | ternary('true', 'false') }}";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ uu_auto_reboot_time }}";
+
+{% if uu_mail | length > 0 %}
+Unattended-Upgrade::Mail "{{ uu_mail }}";
+Unattended-Upgrade::MailReport "{{ uu_mail_report }}";
+{% endif %}
+
+// Конфликты конф-файлов: сохранять старую версию (наши конфиги не перетираются
+// автоматически), новый вариант кладётся рядом как .dpkg-dist.
+Dpkg::Options {
+    "--force-confdef";
+    "--force-confold";
+};

@@ -1,0 +1,41 @@
+---
+# Автоматические обновления безопасности (unattended-upgrades).
+#
+# Рассчитано на «настроил и забыл на годы»: дефолты максимально безопасны для
+# неуправляемого LTS-сервера. Всё переопределяемо из inventory.
+
+# Только security-pocket. true (рекоменд.) — НИКАКИХ feature/release-апдейтов,
+# только бэкпортнутые фиксы безопасности (ABI-стабильны на LTS). false —
+# добавить также ${distro}-updates (НЕ рекомендуется для fire-and-forget).
+uu_security_only: true
+
+# --- Перезагрузка (фиксы ядра/glibc/openssl инертны до ребута) ---
+uu_auto_reboot: true
+uu_auto_reboot_time: "04:00"        # локальное время сервера
+# true — ребутать даже если кто-то залогинен. Для неуправляемого сервера это
+# нужно: иначе ребут откладывается бесконечно (никто не выходит «осознанно»).
+uu_auto_reboot_with_users: true
+
+# --- Гигиена диска (главная причина тихого «загнивания» апдейтов) ---
+uu_remove_unused_kernel_packages: true   # чтобы /boot не забился → apt не встал
+uu_remove_new_unused_dependencies: true
+uu_remove_unused_dependencies: true
+
+uu_minimal_steps: true              # дробить транзакцию — устойчивее к обрыву
+uu_syslog_enable: true              # лог в journal/syslog для пост-мортема
+
+# Уведомления. Пусто = без писем (для неуправляемого сервера почту всё равно
+# никто не читает). Можно задать адрес + режим on-change/only-on-error.
+uu_mail: ""
+uu_mail_report: "only-on-error"
+
+# Пакеты, которые НИКОГДА не трогать автоматически (regex). На security-pocket
+# LTS major-бампов не бывает, но при желании можно запинить, напр.:
+#   uu_package_blacklist: ["mysql-server", "php8\\.4-fpm"]
+uu_package_blacklist: []
+
+# --- Расписание APT::Periodic (файл 20auto-upgrades) ---
+uu_periodic_update_package_lists: "1"     # ежедневно apt update
+uu_periodic_download_upgradeable: "1"     # предзагрузка пакетов
+uu_periodic_unattended_upgrade: "1"       # ежедневно ставить обновления
+uu_periodic_autoclean_interval: "7"       # apt autoclean раз в 7 дней

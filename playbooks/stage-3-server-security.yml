@@ -8,8 +8,9 @@
 # 3) `fail2ban` IPS (fail2ban sshd jail включать **после** проверки ключей)
 # 4) `ssh_remote_security` Отключение пароля, hardening ciphers/MACs/Kex
 #    (PermitRootLogin остаётся prohibit-password — root по ключу с passphrase)
-# 5) **post-check** Проверка что SSH по ключу всё ещё работает после hardening
-# 6) app_armor` (опционально) MAC-профили в режиме **complain** сначала
+# 5) `unattended_upgrades` Авто security-патчи + ночной авто-ребут (fire-and-forget)
+# 6) **post-check** Проверка что SSH по ключу всё ещё работает после hardening
+# 7) app_armor` (опционально) MAC-профили в режиме **complain** сначала
 #
 # Подключение automation-пользователем по ключу (sudo NOPASSWD).
 # Запускать ТОЛЬКО после успешного Stage 2.
@@ -54,6 +55,7 @@
   roles:
     - ../roles/system/ufw
     - ../roles/system/ssh_remote_security
+    - ../roles/system/unattended_upgrades
 
   post_tasks:
     - name: Post-check root SSH login after sshd hardening
@@ -85,7 +87,7 @@
     # AppArmor (после фазы B4 — в complain mode) можно включать тут же или отдельно:
     # - ../roles/system/app_armor
 
-  # Post-conditions: firewall и IPS реально подняты (см. TODO/000-PLAN.MD).
+  # Post-conditions: firewall и IPS реально подняты (см. TODO/000-NOTES.MD).
   post_tasks:
     - name: Get UFW status
       command: ufw status
