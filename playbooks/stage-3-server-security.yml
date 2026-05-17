@@ -105,3 +105,34 @@
       register: f2b_sshd
       changed_when: false
       failed_when: f2b_sshd.rc != 0
+
+    # unattended-upgrades: проверяем не «пакет стоит», а что автопатчинг реально
+    # включён и конфиг валиден (для fire-and-forget молчаливый не-патчинг = тихий
+    # фатал). Роль уже валидирует apt.conf.d через apt-config dump — здесь
+    # enforcing-проверка боевого результата.
+    - name: Get APT::Periodic::Unattended-Upgrade value
+      command: apt-config dump APT::Periodic::Unattended-Upgrade
+      register: uu_periodic
+      changed_when: false
+
+    - name: Assert unattended-upgrade is scheduled
+      assert:
+        that:
+          - '''APT::Periodic::Unattended-Upgrade "1"'' in uu_periodic.stdout'
+        fail_msg: >-
+          Автопатчинг не запланирован (APT::Periodic::Unattended-Upgrade != 1).
+          apt-config dump: {{ uu_periodic.stdout }}
+
+    - name: Assert apt-daily-upgrade timer is active
+      command: systemctl is-active apt-daily-upgrade.timer
+      register: uu_timer
+      changed_when: false
+      failed_when: uu_timer.stdout | trim != 'active'
+
+    # Сухой прогон: end-to-end проверка — конфиг парсится, origins резолвятся,
+    # ошибок нет. rc != 0 = битая конфигурация unattended-upgrades.
+    - name: Dry-run unattended-upgrade (config sanity)
+      command: unattended-upgrade --dry-run
+      register: uu_dry
+      changed_when: false
+      failed_when: uu_dry.rc != 0
