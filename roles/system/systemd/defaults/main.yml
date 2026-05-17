@@ -1,0 +1,7 @@
+---
+# Лимиты systemd-journald. Раньше были захардкожены в tasks/main.yml
+# (SystemMaxUse=100M, RuntimeMaxUse=50M). Формат — как в journald.conf
+# (суффиксы K/M/G). Применяются через drop-in journald.conf.d/, основной
+# /etc/systemd/journald.conf не правится.
+journald_system_max_use: 100M    # потолок постоянного журнала (/var/log/journal)
+journald_runtime_max_use: 50M    # потолок volatile-журнала (/run/log/journal)

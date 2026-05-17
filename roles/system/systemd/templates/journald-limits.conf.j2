@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# Лимиты journald. Управляется ролью roles/system/systemd — не править вручную,
+# изменения через переменные journald_system_max_use / journald_runtime_max_use.
+[Journal]
+SystemMaxUse={{ journald_system_max_use }}
+RuntimeMaxUse={{ journald_runtime_max_use }}
