@@ -1,83 +1,149 @@
 ##########################################################
 #
-# 000000000000000000000000
+# На будущее, не удалять, доделать.
 #
 ##########################################################
+#
+# Установка Docker CE + Compose v2 (плагин) по официальной инструкции Docker
+# для Ubuntu. Полностью переписано на актуальные практики (2024+):
+#
+#  - apt_key УБРАН (deprecated в Debian/Ubuntu и в ansible-core): ключ кладётся
+#    в /etc/apt/keyrings и привязывается к репозиторию через signed-by.
+#  - Релиз Ubuntu НЕ хардкодится — берётся из факта ansible_distribution_release
+#    (на проде Ubuntu 24.04 → noble; раньше был зашит jammy).
+#  - Compose v1.25 standalone-бинарь УБРАН (EOL). Ставится docker-compose-plugin
+#    (Compose v2, вызов `docker compose`) + docker-buildx-plugin.
+#  - Репозиторий заводится через ansible.builtin.deb822_repository
+#    (требует ansible-core >= 2.15; современный формат .sources).
+#  - Отпечаток GPG-ключа Docker проверяется явно (defense-in-depth).
+#  - FQCN у всех модулей, минимальный набор зависимостей.
+#
+# Запускать опционально, поверх настроенного сервера (Stage 1+).
+##########################################################
 ---
--   name: Provision Site
+-   name: Install Docker CE + Compose v2
     hosts: site
     remote_user: "{{ ssh_automation_user }}"
     become: true
-    tasks:
-        -   name: Update apt packages
-            apt:
-                update_cache: yes
+    vars:
+        # Официальный отпечаток GPG-ключа Docker (apt репозиторий).
+        docker_apt_key_fingerprint: "9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
+        # Кого добавить в группу docker (доступ к сокету без sudo).
+        docker_group_members:
+            - "{{ ssh_automation_user }}"
 
-        -   name: Install dependencies
-            apt:
+    tasks:
+        -   name: Assert host is Ubuntu
+            ansible.builtin.assert:
+                that:
+                    - ansible_distribution == 'Ubuntu'
+                fail_msg: >-
+                    Плейбук рассчитан на Ubuntu (репозиторий Docker для Ubuntu).
+                    Обнаружено: {{ ansible_distribution }} {{ ansible_distribution_version }}.
+
+        -   name: Install prerequisites
+            ansible.builtin.apt:
                 name:
-                    - apt-transport-https
                     - ca-certificates
                     - curl
-                    - cron
-                    - gnupg2
-                    - lsb-release
-                    - software-properties-common
+                    - gnupg
+                    - cron            # нужен для модуля cron (docker-prune)
                 state: present
-                update_cache: yes
+                update_cache: true
+                cache_valid_time: 3600
 
-        -   name: Add GPG key
-            apt_key:
+        -   name: Ensure APT keyrings directory exists
+            ansible.builtin.file:
+                path: /etc/apt/keyrings
+                state: directory
+                mode: '0755'
+
+        -   name: Download Docker official GPG key
+            ansible.builtin.get_url:
                 url: https://download.docker.com/linux/ubuntu/gpg
+                dest: /etc/apt/keyrings/docker.asc
+                mode: '0644'
+                force: false
+
+        -   name: Read Docker GPG key fingerprint
+            ansible.builtin.command:
+                cmd: gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc
+            register: docker_key_show
+            changed_when: false
+
+        -   name: Assert Docker GPG key fingerprint matches
+            ansible.builtin.assert:
+                that:
+                    - docker_apt_key_fingerprint in (docker_key_show.stdout_lines
+                        | select('match', '^fpr:')
+                        | map('split', ':')
+                        | map('select')
+                        | map('last')
+                        | list)
+                fail_msg: >-
+                    Отпечаток скачанного ключа Docker не совпал с ожидаемым
+                    {{ docker_apt_key_fingerprint }} — возможна подмена. Прервано.
+
+        -   name: Detect dpkg architecture
+            ansible.builtin.command:
+                cmd: dpkg --print-architecture
+            register: dpkg_arch
+            changed_when: false
+
+        -   name: Configure Docker APT repository (deb822)
+            ansible.builtin.deb822_repository:
+                name: docker
+                types: deb
+                uris: https://download.docker.com/linux/ubuntu
+                suites: "{{ ansible_distribution_release }}"
+                components: stable
+                architectures: "{{ dpkg_arch.stdout }}"
+                signed_by: /etc/apt/keyrings/docker.asc
+                state: present
+                enabled: true
+            register: docker_repo
+
+        -   name: Update apt cache after adding Docker repo
+            ansible.builtin.apt:
+                update_cache: true
+            when: docker_repo.changed
+
+        -   name: Install Docker Engine + Compose v2 plugin
+            ansible.builtin.apt:
+                name:
+                    - docker-ce
+                    - docker-ce-cli
+                    - containerd.io
+                    - docker-buildx-plugin
+                    - docker-compose-plugin
                 state: present
 
-        -   name: Verify fingerprint
-            apt_key:
-                id: 0EBFCD88
-                state: present
+        -   name: Ensure Docker service is enabled and running
+            ansible.builtin.systemd:
+                name: docker
+                state: started
+                enabled: true
 
-        -   name: Set up the repository
-            apt_repository:
-                repo: deb https://download.docker.com/linux/ubuntu jammy stable
-                state: present
-                filename: docker
-                update_cache: yes
-
-        -   name: Install Docker
-            apt:
+        -   name: Add users to docker group
+            ansible.builtin.user:
                 name: "{{ item }}"
-                state: present
-                update_cache: yes
-            loop:
-                - docker-ce
-                - docker-ce-cli
-                - containerd.io
-            notify: Start docker on boot
+                groups: docker
+                append: true
+            loop: "{{ docker_group_members }}"
+            # Группа docker = root-эквивалент: добавляем только доверенных
+            # (по умолчанию — automation-пользователь Ansible).
 
-        -   name: Install Docker Compose
-            get_url:
-                url: https://github.com/docker/compose/releases/download/1.25.0/docker-compose-{{ ansible_system }}-{{ ansible_userspace_architecture }}
-                dest: /usr/local/bin/docker-compose
-                group: docker
-                mode: 'u+x,g+x'
-
-        -   name: Set periodic Docker prune
-            cron:
+        -   name: Periodic Docker prune (cron)
+            ansible.builtin.cron:
                 name: docker-prune
                 job: 'docker system prune -af --filter "until=$((30*24))h"'
                 minute: '0'
                 hour: '1'
 
-        -   name: Remove useless packages
-            apt:
-                autoclean: yes
+        -   name: Apt autoclean
+            ansible.builtin.apt:
+                autoclean: true
 
-        -   name: Remove useless dependencies
-            apt:
-                autoremove: yes
-    handlers:
-        -   name: Start docker on boot
-            systemd:
-                name: docker
-                state: started
-                enabled: yes
+        -   name: Apt autoremove
+            ansible.builtin.apt:
+                autoremove: true
