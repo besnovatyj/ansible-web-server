@@ -4,6 +4,7 @@
   apt:
     update_cache: yes # обновляет кэш APT (список доступных пакетов)
     cache_valid_time: 86400  # One day (кэш обновляется, только если он старше 24 часов (идемпотентность))
+    lock_timeout: 300  # ждать dpkg/apt-lock до 5 мин (гонка с unattended-upgrades/apt-daily.timer), затем чёткая ошибка
 
 - name: Install security updates only
   become: true
@@ -11,10 +12,20 @@
     upgrade: safe  # Безопасное обновление, не удаляет пакеты (выполняет обновление установленных пакетов без удаления или установки новых зависимостей (аналог apt upgrade, а не apt full-upgrade).)
     only_upgrade: true  # Только обновление установленных пакетов (обновляет только уже установленные пакеты, не добавляя новых.)
     default_release: "{{ ansible_distribution_release }}-security"  # Только security-репозиторий (ограничивает обновления только пакетами из security-репозитория Ubuntu (например, noble-security для Ubuntu 24.04). Это минимизирует изменения, так как применяются только патчи безопасности. `{{ ansible_distribution_release }}` - факт ансибл, указывать вручную не нужно)
+    lock_timeout: 300  # см. комментарий выше
   register: apt_update_result # для отладки, если нужно проверить, какие пакеты обновились.
 
-- name: Wait for system apt locks to be released
-  shell: while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done;
+# Перед reboot убеждаемся, что dpkg не в середине операции (иначе ребут
+# посреди установки пакета). Раньше это был БЕЗУСЛОВНЫЙ цикл без таймаута →
+# вечный hang при удержании lock. Теперь — ограничен 5 минутами, при
+# превышении стадия падает с понятным сообщением (перезапустить позже),
+# а не виснет и не ребутит сервер во время операции apt.
+- name: Wait for system apt locks to be released (bounded)
+  ansible.builtin.command:
+    cmd: timeout 300 bash -c 'while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done'
+  register: dpkg_lock_wait
+  changed_when: false
+  failed_when: dpkg_lock_wait.rc != 0
 
 - name: Check if reboot is required
   become: true

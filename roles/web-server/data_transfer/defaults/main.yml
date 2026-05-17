@@ -1,0 +1,33 @@
+---
+# Роль РЕЗЕРВНАЯ (stage-5c, не в full-deploy): деплой исходников rsync + импорт
+# дампа БД. Все значения переопределяемы из inventory / -e.
+
+# ОБЯЗАТЕЛЬНО задать: абсолютный путь к локальному дереву исходников приложения
+# (то, что синхронизируется в {{ web_root }}/{{ domain_name }}/). Пусто →
+# pre-flight assert остановит выполнение (раньше тут был placeholder
+# "FULL_ABSOLUTE_PATH??").
+data_transfer_src: ""
+
+# rsync --delete: удалять на сервере файлы, которых нет локально.
+data_transfer_delete: true
+
+# Каталоги (относительно корня приложения), которым нужны права на запись
+# www-data: runtime, кэши, загрузки, ассеты. Раньше им ставили mode '7777'
+# рекурсивно по всему коду — это RCE-класс; теперь только эти каталоги и 0775.
+data_transfer_writable_dirs:
+  - pub/storage/runtime
+  - pub/web/static/cache
+  - pub/web/static/files
+  - pub/web/static/origin
+  - pub/web/front/assets
+  - pub/web/back/assets
+
+# Права записываемых каталогов: 0775 + группа www-data (НЕ 0777). Код
+# приложения остаётся 0755 (owner www-data) после общего chown.
+data_transfer_writable_mode: "0775"
+
+# Импорт дампа БД — opt-in (резервная операция, разрушительна при --delete-подобной
+# перезаливке схемы). По умолчанию ВЫКЛ.
+data_transfer_import_db: false
+# Путь к локальному дампу (по умолчанию каталог проекта /mysql_dump/dump.sql).
+data_transfer_db_dump_src: "{{ inventory_dir }}/../mysql_dump/dump.sql"

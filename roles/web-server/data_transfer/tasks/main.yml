@@ -1,40 +1,90 @@
 ---
-- name: Sync site files # https://stackoverflow.com/a/27995384 (обертка над `rsync`)
+# Корень приложения на сервере.
+- name: Set application root fact
+  ansible.builtin.set_fact:
+    app_root: "{{ web_root }}/{{ domain_name }}"
+
+# Pre-flight: без явного источника синхронизировать нечего (раньше здесь был
+# placeholder "FULL_ABSOLUTE_PATH??", из-за которого роль не работала).
+- name: Assert source path is provided
+  ansible.builtin.assert:
+    that:
+      - data_transfer_src | length > 0
+    fail_msg: >-
+      data_transfer_src не задан. Укажите абсолютный путь к локальному дереву
+      исходников приложения: -e data_transfer_src=/abs/path или в inventory.
+
+- name: Sync site files  # https://stackoverflow.com/a/27995384 (обёртка над rsync)
   ansible.posix.synchronize:
-    src: "FULL_ABSOLUTE_PATH??"
-    dest: {{ web_root }}/{{ domain_name }}/
-    delete: yes # Удалит файлы на сервере, которых нет локально (опционально)
-    # checksum=true # По-умолчанию rsync использует для сравнения "mod-time" и "file size", если нужно сравнивать по содержимому, то включить эту опцию (checksum=true)
+    src: "{{ data_transfer_src }}/"
+    dest: "{{ app_root }}/"
+    delete: "{{ data_transfer_delete }}"  # удалит на сервере файлы, которых нет локально (опционально)
+    # checksum=true # rsync по умолчанию сравнивает mod-time+size; для сравнения по содержимому включить checksum
+    rsync_opts:
+      - "--no-owner"
+      - "--no-group"
+    # /var/www обычно root-owned → rsync на сервере под sudo (automation NOPASSWD).
+    rsync_path: "sudo rsync"
 
-- name: Change file ownership, group and permissions (7777)
+# Весь код приложения — www-data:www-data, права по умолчанию (каталоги 0755,
+# файлы 0644). Это заменяет прежний рекурсивный mode '7777'.
+- name: Set application ownership (www-data)
   ansible.builtin.file:
-    path: [
-      "{{ web_root }}/{{ domain_name }}/pub/storage/runtime",
-      "{{ web_root }}/{{ domain_name }}/pub/web/static/cache",
-      "{{ web_root }}/{{ domain_name }}/pub/web/static/files",
-      "{{ web_root }}/{{ domain_name }}/pub/web/static/origin",
-      "{{ web_root }}/{{ domain_name }}/pub/web/front/assets",
-      "{{ web_root }}/{{ domain_name }}/pub/web/back/assets",
-    ]
-    owner: "www-data"
-    group: "www-data"
-    mode: '7777' # TODO Должно быть максимум `0755` (или `0775` с  правильной группой).
-    recurse: yes
+    path: "{{ app_root }}"
+    owner: www-data
+    group: www-data
+    recurse: true
 
-- name: Copy db dump on server
-  copy:
-    src: ../../mysql_dump/dump.sql
-    dest: "{{ web_root }}/dump.sql"
-
-- name: MySQL dump
-  mysql_db:
-    name: domain_name_db
-    state: import
-    target: "{{ web_root }}/dump.sql"
-    login_user: root
-#    login_password: "{{ mysql_root_password }}"
-
-- name: Remove remote dump.sql
+# Только записываемым каталогам — групповая запись (0775), не миру (не 0777).
+- name: Ensure writable directories with correct mode
   ansible.builtin.file:
-    path: "{{ web_root }}/dump.sql"
-    state: absent
+    path: "{{ app_root }}/{{ item }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "{{ data_transfer_writable_mode }}"
+    recurse: true
+  loop: "{{ data_transfer_writable_dirs }}"
+
+# --- Импорт дампа БД (opt-in) ---
+- name: Database import block
+  when: data_transfer_import_db | bool
+  block:
+    - name: Stat local DB dump
+      ansible.builtin.stat:
+        path: "{{ data_transfer_db_dump_src }}"
+      delegate_to: localhost
+      become: false
+      register: db_dump_stat
+
+    - name: Assert DB dump exists and is non-empty
+      ansible.builtin.assert:
+        that:
+          - db_dump_stat.stat.exists
+          - db_dump_stat.stat.size > 0
+        fail_msg: >-
+          Дамп {{ data_transfer_db_dump_src }} отсутствует или пуст —
+          импорт БД пропущен бы молча. Проверь путь/содержимое.
+
+    - name: Copy DB dump to server
+      ansible.builtin.copy:
+        src: "{{ data_transfer_db_dump_src }}"
+        dest: "{{ web_root }}/dump.sql"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Import DB dump
+      mysql_db:
+        name: "{{ mysql_db_name }}"
+        state: import
+        target: "{{ web_root }}/dump.sql"
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      no_log: true
+
+    - name: Remove remote dump.sql
+      ansible.builtin.file:
+        path: "{{ web_root }}/dump.sql"
+        state: absent

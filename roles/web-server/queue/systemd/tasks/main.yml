@@ -3,6 +3,18 @@
 # (существует {{ web_root }}/{{ domain_name }}/yii и рабочий .env).
 # Плейбук запускается вручную ПОСЛЕ деплоя и полностью настраивает очереди.
 
+# Защита от тихого no-op: при queue_workers_count=0/undefined диапазон
+# range(1, 1) пуст → воркеры молча НЕ создаются (и template, и handler).
+# Лучше явно упасть, чем получить очередь без обработчиков.
+- name: Assert queue_workers_count is valid (>= 1)
+  ansible.builtin.assert:
+    that:
+      - queue_workers_count is defined
+      - queue_workers_count | int >= 1
+    fail_msg: >-
+      queue_workers_count = {{ queue_workers_count | default('undefined') }}
+      (нужно целое >= 1). Проверь inventory/group_vars/all/webserver.yml.
+
 - name: Установить systemd-шаблон юнита Yii2 queue worker
   ansible.builtin.template:
     src: yii-queue@.service.j2
