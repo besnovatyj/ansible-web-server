@@ -74,6 +74,8 @@
         loop_var: su
         label: "{{ su.name }} ({{ su.type }})"
 
+# fail2ban с `[sshd]` jail включаем **после** post-check SSH, не до — иначе во время
+# exhaustive проверки SSH сам контроллер может попасть в бан, если что-то пойдёт не так с ключами.
 - name: Stage 3 - Enable fail2ban (after SSH verification)
   hosts: site
   remote_user: "{{ ssh_automation_user }}"

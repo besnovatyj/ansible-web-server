@@ -6,9 +6,11 @@
 # 1) Устанавливает certbot + python3-certbot-nginx
 # 2) Получает сертификаты для всех доменов из `nginx_sites[*].server_name`
 # 3) Запускает `certbot --nginx --non-interactive --agree-tos -m {{ certbot_email }} -d ...` — Certbot сам редактирует Nginx
-# 4) Регистрирует cron (systemd) для `certbot renew`
+# 4) Регистрирует systemd certbot.timer
 #
 # Запускать после Stage 4 и настройки DNS.
+# Предусловия для запуска: Stage 4 успешно прошёл, DNS на доменах указывает на этот сервер,
+# проверь руками `dig +short {{ domain_name }}` показывает IP сервера.
 ##########################################################
 ---
 -   name: Pre-flight checks for stage 5a
