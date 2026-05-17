@@ -1,0 +1,11 @@
+---
+# Перезапуск воркеров при изменении unit-файла (чтобы подхватились новые
+# ExecStart / MemoryMax / CPUQuota). daemon_reload — перед рестартом.
+- name: Restart yii-queue workers
+  ansible.builtin.systemd_service:
+    name: "yii-queue@{{ item }}"
+    state: restarted
+    daemon_reload: true
+  loop: "{{ range(1, queue_workers_count + 1) | list }}"
+  loop_control:
+    label: "yii-queue@{{ item }}"
