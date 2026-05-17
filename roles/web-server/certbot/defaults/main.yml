@@ -1,0 +1,10 @@
+---
+# certbot_staging — выпускать сертификат против Let's Encrypt STAGING CA
+# (acme-staging-v02). STAGING имеет отдельные, очень щедрые rate-лимиты и НЕ
+# расходует прод-квоты (Duplicate Certificate 5/нед, Failed Validation и т.д.).
+#
+# Когда включать: отладка пайплайна, повторные прогоны stage-5a, проверка DNS.
+# ВАЖНО: staging-сертификат подписан недоверенным CA — в браузере будет
+# ошибка. Для боевого выпуска оставить false (или переопределить в inventory
+# на время теста: `-e certbot_staging=true`).
+certbot_staging: false

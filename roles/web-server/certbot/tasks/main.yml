@@ -16,13 +16,35 @@
                        | map('regex_replace', '^(.+)$', '-d \1')
                        | join(' ') }}
 
+# Идемпотентность и защита от rate-limit Let's Encrypt — на стороне самого
+# certbot, НЕ через `creates:` (старый файловый гард был хрупок: имя lineage
+# certbot берёт из ПЕРВОГО -d, а не из domain_name → при ином порядке
+# nginx_sites путь не совпадал и сертификат перевыпускался каждый прогон).
+#
+#   --cert-name {{ domain_name }}  фиксирует имя lineage детерминированно,
+#                                  каталог всегда /etc/letsencrypt/live/{{ domain_name }}/
+#                                  независимо от порядка/состава nginx_sites.
+#   --keep-until-expiring          валидный неистёкший сертификат с тем же
+#                                  набором доменов НЕ перевыпускается (нет
+#                                  расхода квоты Duplicate Certificate);
+#                                  изменился набор -d → certbot сам расширит
+#                                  (--expand неявно при non-interactive) —
+#                                  лечит молчаливое недопокрытие при добавлении
+#                                  vhost. Перевыпуск только у истечения.
+#   --staging                      см. defaults/main.yml (certbot_staging).
 -   name: Request Let's Encrypt certificates
     command: >
       certbot --nginx --non-interactive --agree-tos
               -m {{ certbot_email }}
+              --cert-name {{ domain_name }}
+              --keep-until-expiring
+              {{ '--staging' if certbot_staging | bool else '' }}
               {{ certbot_domains_args }}
-    args:
-      creates: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+    register: certbot_run
+    # Успех любого реального действия (выпуск / обновление / расширение) certbot
+    # печатает "Congratulations". Путь "Certificate not yet due for renewal;
+    # no action taken" — без него → корректно not changed.
+    changed_when: "'Congratulations' in certbot_run.stdout"
 
 -   name: Ensure certbot renew timer is enabled
     systemd:
