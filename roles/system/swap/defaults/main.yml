@@ -1,0 +1,5 @@
+---
+# Путь и размер swap-файла. Размер — строка в формате fallocate
+# (напр. 2G, 1024M, 512M). Раньше было захардкожено 2G в tasks/main.yml.
+swap_file_path: /swapfile
+swap_file_size: 2G

@@ -1,30 +1,35 @@
 ---
 - name: Check if swapfile exists
-  stat:
-    path: /swapfile
+  ansible.builtin.stat:
+    path: "{{ swap_file_path }}"
   register: swapfile_check
 
-- name: Create swapfile of 2GB if it does not exist
-  command: fallocate -l 2G /swapfile
+- name: Create swapfile ({{ swap_file_size }}) if it does not exist
+  ansible.builtin.command:
+    cmd: "fallocate -l {{ swap_file_size }} {{ swap_file_path }}"
   when: not swapfile_check.stat.exists
 
 - name: Set permissions on swapfile
-  file:
-    path: /swapfile
+  ansible.builtin.file:
+    path: "{{ swap_file_path }}"
     mode: '0600'
   when: not swapfile_check.stat.exists
 
 - name: Format swapfile
-  command: mkswap /swapfile
+  ansible.builtin.command:
+    cmd: "mkswap {{ swap_file_path }}"
   when: not swapfile_check.stat.exists
 
 - name: Activate swapfile
-  command: swapon /swapfile
+  ansible.builtin.command:
+    cmd: "swapon {{ swap_file_path }}"
   when: not swapfile_check.stat.exists
 
+# fstab — без `when: not exists`: запись должна присутствовать всегда
+# (lineinfile идемпотентен), иначе при пересоздании роли swap не примонтируется
+# после ребута, если файл уже был.
 - name: Add swapfile to /etc/fstab
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/fstab
-    line: '/swapfile none swap sw 0 0'
+    line: "{{ swap_file_path }} none swap sw 0 0"
     state: present
-  when: not swapfile_check.stat.exists
