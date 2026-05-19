@@ -4,6 +4,16 @@
 # Обновление known_hosts предотвращает MITM-атаки ("человек посередине")
 ##
 ---
+# Модуль known_hosts НЕ создаёт родительский каталог: он пишет временный файл
+# рядом с целевым и атомарно перемещает. Если ~/.ssh отсутствует — падает
+# "[Errno 2] No such file or directory: .../.ssh/tmpXXXX". Создаём каталог
+# заранее с безопасными правами (0700 — стандарт для ~/.ssh).
+- name: Ensure ~/.ssh directory exists (known_hosts module does not create it)
+  ansible.builtin.file:
+    path: "{{ ssh_known_hosts_path | dirname }}"
+    state: directory
+    mode: '0700'
+
 # Удаление старой записи (аналог ssh-keygen -R)
 - name: Remove old host entry from known_hosts
   ansible.builtin.known_hosts:
