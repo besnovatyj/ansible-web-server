@@ -36,8 +36,21 @@
 - name: Reboot server if needed
   become: true
   ansible.builtin.reboot:
-    reboot_timeout: 300
+    # Не время ожидания по умолчанию, а максимальное время ожидания, Ansible периодически пингует сервер.
+    # Модуль ansible.builtin.reboot после команды reboot в цикле опрашивает хост и выполняет test_command
+    # (по умолчанию whoami), и возвращается сразу, как только сервер ответил.
+    reboot_timeout: 900
+    post_reboot_delay: 15 # (по умолчанию 0) пауза перед попытками подключения — сеть/sshd успевают подняться
   when: reboot_required.stat.exists
+
+# WORKAROUND Ansible #79992: модуль reboot после перезагрузки зацикливается на
+# протухшем persistent SSH-мастере (ControlPersist) и сам не переподключается.
+# Принудительно сбрасываем кэш соединения, чтобы последующие роли stage-1
+# (locales/swap/systemd) шли по свежему сокету, а не ждали истечения ControlPersist.
+# meta: reset_connection НЕ поддерживает when — ставим безусловно: при пропущенном
+# ребуте это дешёвый сброс здорового соединения (переустановится на следующем таске).
+- name: Reset SSH connection after potential reboot (Ansible #79992)
+  meta: reset_connection
 
 # Полное обновление, включая все дистрибутивы, может поломать что-нибудь
 #- name: Update APT package cache
