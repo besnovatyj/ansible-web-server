@@ -5,9 +5,15 @@
 #
 # - Каждому пользователю из server_users — его публичный ключ
 #   (key_<domain>_<name>.pub) в ~/.ssh/authorized_keys.
-# - automation-ключ помечается опцией `restrict` (см. 000-ANALYSIS.md §7):
-#   нет pty/agent/X11/port-forwarding — automation-сессии это не нужно,
-#   а площадь злоупотребления украденным (без passphrase) ключом сужается.
+# - automation-ключ помечается опцией `restrict,pty` (см. 000-ANALYSIS.md §7):
+#   запрещены agent/X11/port-forwarding/user-rc — площадь злоупотребления
+#   украденным (без passphrase) ключом сужается. pty ВОЗВРАЩЁН точечно поверх
+#   restrict: модуль `ansible.builtin.reboot` идёт через `become` (sudo), а
+#   Ansible на ssh-транспорте форсит `-tt` для sudo-команд; pipelining покрывает
+#   обычные модули, но НЕ reboot и его пост-проверки → с `no-pty` (входит в
+#   restrict) reboot падает "PTY allocation request failed on channel 0"
+#   (Ansible #4227). no-pty всё равно не блокировал exec/sftp, т.е. давал лишь
+#   маржинальную защиту, ломая reboot — осознанный размен.
 # - human-ключам restrict НЕ ставим (нужен интерактивный pty).
 # - emergency-ключ root — в /root/.ssh/authorized_keys (аварийный доступ).
 ##
@@ -31,8 +37,9 @@
     key: "{{ lookup('file', local_ssh_keys_dir + '/key_' + domain_name + '_' + su.name + '.pub') }}"
     state: present
     manage_dir: true
-    # restrict только для automation; human получает ключ без ограничений (нужен pty).
-    key_options: "{{ 'restrict' if su.type == 'automation' else omit }}"
+    # restrict,pty только для automation; human получает ключ без ограничений.
+    # pty поверх restrict — иначе reboot+become падает по no-pty (см. шапку, #4227).
+    key_options: "{{ 'restrict,pty' if su.type == 'automation' else omit }}"
   loop: "{{ server_users }}"
   loop_control:
     loop_var: su
