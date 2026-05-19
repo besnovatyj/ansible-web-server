@@ -52,13 +52,13 @@ full-deploy: stage-0 stage-1b stage-1 stage-2 stage-3 stage-4 stage-6
 # Vault
 # =============================================================================
 vault-encrypt: # Шифрует из файла в Ansible Vault
-	ansible-vault encrypt ./secrets/secrets.yml --output ./group_vars/all/secrets.vault
+	ansible-vault encrypt ./secrets/secrets.yml --output ./inventory/group_vars/all/secrets
 vault-create: # Создание хранилища Ansible Vault
-	ansible-vault create ./group_vars/all/secrets.vault
+	ansible-vault create ./inventory/group_vars/all/secrets
 vault-edit: # Редактирование данных в хранилище Ansible Vault
-	ansible-vault edit ./group_vars/all/secrets.vault
+	ansible-vault edit ./inventory/group_vars/all/secrets
 vault-view: # Просмотр данных в хранилище Ansible Vault
-	ansible-vault view ./group_vars/all/secrets.vault
+	ansible-vault view ./inventory/group_vars/all/secrets
 
 # =============================================================================
 # Инициализация контроллера
