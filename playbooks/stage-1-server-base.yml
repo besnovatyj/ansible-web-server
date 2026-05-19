@@ -58,16 +58,29 @@
           - swap_show.stdout | trim | length > 0
         fail_msg: "Swap не активен (swapon --show пуст). Проверь роль system/swap."
 
-    - name: Get system locale
+    - name: Get generated locales
+      command: locale -a
+      register: locale_avail
+      changed_when: false
+
+    - name: Get system locale (localectl)
       command: localectl status
       register: localectl_status
       changed_when: false
 
-    - name: Assert locale is set
+    # Требование под задачу: ru_RU.UTF-8 СГЕНЕРИРОВАНА (нужна приложению через
+    # явный setlocale; Yii2-локализация идёт через intl/ICU, не через LANG ОС),
+    # а системный LANG = locale2 (en_US.UTF-8) — консоль на английском.
+    # `locale -a` печатает имя как `ru_RU.utf8`, поэтому сверяем по части до точки.
+    - name: Assert ru_RU locale generated and system LANG is en_US
       assert:
         that:
-          - locale1 in localectl_status.stdout
-        fail_msg: "Системная локаль не содержит {{ locale1 }}. localectl: {{ localectl_status.stdout }}"
+          - locale1.split('.')[0] in locale_avail.stdout
+          - ('LANG=' ~ locale2) in localectl_status.stdout
+        fail_msg: >-
+          Ожидалось: локаль {{ locale1 }} сгенерирована (locale -a) и системный
+          LANG={{ locale2 }}. locale -a: {{ locale_avail.stdout }}.
+          localectl: {{ localectl_status.stdout }}.
 
     - name: Get configured timezone
       command: timedatectl show -p Timezone --value

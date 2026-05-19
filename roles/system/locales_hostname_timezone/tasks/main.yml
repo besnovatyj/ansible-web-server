@@ -17,9 +17,18 @@
     - "{{ locale1 }}"
     - "{{ locale2 }}"
 
-- name: Set locale settings
-  shell:
-    cmd: 'locale-gen {{ locale1 }} && LANG={{ locale2 }} LC_TIME="{{ locale1 }}" && update-locale'
+# Системная локаль: LANG = locale2 (en_US.UTF-8) — консоль и логи системы на
+# английском. locale1 (ru_RU.UTF-8) выше уже сгенерирована через locale_gen и
+# доступна процессам, которые её явно запрашивают (напр. PHP setlocale).
+# Локализация Yii2 (даты, числа, тексты) идёт через intl/ICU и конфиг приложения
+# и от системной LANG НЕ зависит — поэтому русский LANG на ОС не нужен.
+# ПРЕЖНЯЯ команда была сломана: `LANG=.. LC_TIME=..` — это голые присваивания
+# переменных (никуда не экспортируются), а `update-locale` вызывался БЕЗ
+# аргументов → /etc/default/locale не менялся, локаль фактически не ставилась.
+- name: Set system locale (LANG=locale2; ru_RU generated above for the app)
+  ansible.builtin.command:
+    cmd: "update-locale LANG={{ locale2 }}"
+  changed_when: true
 
 - name: Set hostname
   shell:
