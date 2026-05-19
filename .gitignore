@@ -3,5 +3,4 @@
 /mysql_dump
 /secrets/!vault_pass.txt
 /secrets/secrets.yml
-/secrets/ssh/*
-!/secrets/ssh/.gitkeep
+/inventory/group_vars/all/secrets

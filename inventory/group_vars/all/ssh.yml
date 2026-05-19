@@ -31,7 +31,7 @@ ssh_key_passphrase: ""
 emergency_key_passphrase: "{{ vault_ssh_key_passphrase | default('') }}"
 
 ############### Пути к ключам
-local_ssh_keys_dir: "{{ playbook_dir }}/../secrets/ssh" # Была домашняя директория -  "{{ local_home_path }}/.ssh"
+local_ssh_keys_dir: "{{ local_home_path }}/.ssh/{{ domain_name }}" # Выделенный per-domain подкаталог в ~/.ssh (ext4 — Unix-права и chattr работают штатно; изолирует проектные ключи от личных, упрощает бэкап). Ранее было: "{{ playbook_dir }}/../secrets/ssh" — бинд-маунт docker-desktop в WSL2 не хранит права (всё 0777) и ssh-клиент отказывался от таких ключей.
 # ssh_keys_dir: "{{ ansible_env.HOME }}/.ssh" # ansible_env — это facts целевого хоста, а не контроллера
 # Соглашение об именах (как домены из domain_name):
 #   приватный ключ пользователя:  {{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ имя }}
