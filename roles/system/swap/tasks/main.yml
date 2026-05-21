@@ -1,29 +1,46 @@
 ---
+# Проверяем, есть ли уже активный swap (любой — файл, раздел, от хостера).
+# Если есть — не трогаем: дублирующий swap и повторные записи в fstab не нужны.
+- name: Check if swap is already active
+  ansible.builtin.command:
+    cmd: swapon --show=NAME --noheadings
+  register: swap_active
+  changed_when: false
+
 - name: Check if swapfile exists
   ansible.builtin.stat:
     path: "{{ swap_file_path }}"
   register: swapfile_check
+  when: swap_active.stdout | trim | length == 0
 
 - name: Create swapfile ({{ swap_file_size }}) if it does not exist
   ansible.builtin.command:
     cmd: "fallocate -l {{ swap_file_size }} {{ swap_file_path }}"
-  when: not swapfile_check.stat.exists
+  when:
+    - swap_active.stdout | trim | length == 0
+    - not swapfile_check.stat.exists
 
 - name: Set permissions on swapfile
   ansible.builtin.file:
     path: "{{ swap_file_path }}"
     mode: '0600'
-  when: not swapfile_check.stat.exists
+  when:
+    - swap_active.stdout | trim | length == 0
+    - not swapfile_check.stat.exists
 
 - name: Format swapfile
   ansible.builtin.command:
     cmd: "mkswap {{ swap_file_path }}"
-  when: not swapfile_check.stat.exists
+  when:
+    - swap_active.stdout | trim | length == 0
+    - not swapfile_check.stat.exists
 
 - name: Activate swapfile
   ansible.builtin.command:
     cmd: "swapon {{ swap_file_path }}"
-  when: not swapfile_check.stat.exists
+  when:
+    - swap_active.stdout | trim | length == 0
+    - not swapfile_check.stat.exists
 
 # fstab — без `when: not exists`: запись должна присутствовать всегда
 # (lineinfile идемпотентен), иначе при пересоздании роли swap не примонтируется
@@ -33,3 +50,9 @@
     path: /etc/fstab
     line: "{{ swap_file_path }} none swap sw 0 0"
     state: present
+  when: swap_active.stdout | trim | length == 0
+
+- name: Swap already active — skipping setup
+  ansible.builtin.debug:
+    msg: "Swap уже активен ({{ swap_active.stdout_lines | join(', ') }}), пропускаем создание."
+  when: swap_active.stdout | trim | length > 0
