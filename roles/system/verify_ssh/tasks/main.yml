@@ -1,6 +1,10 @@
 ---
 - name: "verify_ssh: SSH login {{ verify_ssh_user }}@{{ target_host }}"
   delegate_to: localhost
+  # become: false — иначе при include из play с `become: true` Ansible пытается
+  # sudo НА ЛОКАЛЬНОЙ машине (а у bes-home нет NOPASSWD) → "sudo: a password
+  # is required". Для локального запуска ssh root не нужен.
+  become: false
   command: >
     ssh -i {{ verify_ssh_key }}
         -o BatchMode=yes
