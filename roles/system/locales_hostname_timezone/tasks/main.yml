@@ -10,12 +10,27 @@
     update_cache: yes
 
 - name: Ensure the locale exists
-  locale_gen:
+  community.general.locale_gen:
     name: "{{ item }}"
     state: present
-  with_items:
+  loop:
     - "{{ locale1 }}"
     - "{{ locale2 }}"
+
+# community.general.locale_gen может вернуть "ok" вхолостую: если строка в
+# /etc/locale.gen уже раскомментирована (часто на образах RU-провайдеров), но
+# locale-gen ни разу не запускалась — модуль считает "present", а в `locale -a`
+# локали фактически нет. Поэтому форсируем запуск и верифицируем.
+- name: Force locale-gen (workaround idempotency bug)
+  ansible.builtin.command: locale-gen
+  changed_when: true
+
+- name: Verify locales actually generated
+  ansible.builtin.shell: |
+    set -e
+    locale -a | grep -qi "^{{ locale1.split('.')[0] }}"
+    locale -a | grep -qi "^{{ locale2.split('.')[0] }}"
+  changed_when: false
 
 # Системная локаль: LANG = locale2 (en_US.UTF-8) — консоль и логи системы на
 # английском. locale1 (ru_RU.UTF-8) выше уже сгенерирована через locale_gen и
