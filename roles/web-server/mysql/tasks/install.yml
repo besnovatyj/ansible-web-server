@@ -10,10 +10,11 @@
     group: root
     mode: '0755'
 
-- name: GPG-ключ репозитория MySQL (Oracle 2023)
+- name: GPG-ключ репозитория MySQL (Oracle 2025)
   get_url:
-    url: https://repo.mysql.com/RPM-GPG-KEY-mysql-2023
+    url: https://repo.mysql.com/RPM-GPG-KEY-mysql-2025
     dest: /etc/apt/keyrings/mysql.asc
+    force: true
     owner: root
     group: root
     mode: '0644'
