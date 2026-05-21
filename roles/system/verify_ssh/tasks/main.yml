@@ -5,8 +5,16 @@
   # sudo НА ЛОКАЛЬНОЙ машине (а у bes-home нет NOPASSWD) → "sudo: a password
   # is required". Для локального запуска ssh root не нужен.
   become: false
+  # IdentitiesOnly=yes + IdentityAgent=none — критично: без них ssh-клиент
+  # на контроллере сначала предлагает все ключи из ssh-agent и ~/.ssh/config,
+  # упирается в MaxAuthTries (default=6) и до нашего -i ключа не доходит →
+  # Permission denied, хотя ключ на сервере корректный. Особенно бьёт по
+  # verify root по emergency-ключу, когда в агенте лежат другие ключи
+  # домена. С этими опциями клиент предложит ТОЛЬКО указанный -i.
   command: >
     ssh -i {{ verify_ssh_key }}
+        -o IdentitiesOnly=yes
+        -o IdentityAgent=none
         -o BatchMode=yes
         -o StrictHostKeyChecking=yes
         -o ConnectTimeout=10
