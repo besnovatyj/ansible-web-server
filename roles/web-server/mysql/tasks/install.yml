@@ -30,13 +30,22 @@
     state: present
     update_cache: yes
 
+- name: Check if MySQL is already installed
+  ansible.builtin.command: dpkg-query -W -f='${Status}' mysql-server
+  register: mysql_installed
+  changed_when: false
+  failed_when: false
+
+# Preseed нужен ТОЛЬКО перед первичной установкой. При повторном прогоне
+# пакет уже стоит, debconf-значения заданы, а модуль debconf в ansible-core
+# ломается на парсинге уже существующих password-полей (ValueError в
+# get_password_value — известный баг).
 - name: Утилита для неинтерактивного preseed debconf
   apt:
     name: debconf-utils
     state: present
+  when: mysql_installed.rc != 0
 
-# Неинтерактивная установка: пароль root и режим строгого шифрования (caching_sha2_password)
-# задаются заранее через debconf, иначе установщик Oracle спросит их интерактивно.
 - name: Preseed пароля root для mysql-community-server
   debconf:
     name: mysql-community-server
@@ -47,6 +56,7 @@
     - mysql-community-server/root-pass
     - mysql-community-server/re-root-pass
   no_log: true
+  when: mysql_installed.rc != 0
 
 - name: Preseed строгого шифрования паролей (caching_sha2_password)
   debconf:
@@ -54,6 +64,7 @@
     question: mysql-community-server/default-auth-override
     vtype: select
     value: "Use Strong Password Encryption (RECOMMENDED)"
+  when: mysql_installed.rc != 0
 
 - name: Install MySQL 8.4 LTS
   apt:
