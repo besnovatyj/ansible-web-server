@@ -25,23 +25,56 @@
     remote_user: "{{ ssh_automation_user }}"
     become: true
     tasks:
-      -   name: Verify root SSH login via emergency key
+      # По политике passphrase есть на ВСЕХ ключах кроме automation; прямой
+      # ssh-вход в BatchMode невозможен → проверяем косвенно (см. stage-2).
+      # В Stage-6 включаем strict-режим: после hardening должно быть строго
+      # PermitRootLogin=prohibit-password (yes разрешает ключ, но допускает
+      # регрессию политики).
+      -   name: Verify root emergency pubkey installed (strict — post-hardening)
           include_role:
-            name: ../roles/system/verify_ssh
+            name: ../roles/system/verify_authorized_key
           vars:
-            verify_ssh_user: root
-            verify_ssh_key: "{{ emergency_key_path }}"
+            verify_target_user: root
+            verify_local_pubkey: "{{ emergency_pubkey_path }}"
+            verify_target_is_root: true
+            verify_permitroot_strict: true
 
-      -   name: Verify each server_user SSH login via its own key
+      -   name: Verify each server_user pubkey installed
           include_role:
-            name: ../roles/system/verify_ssh
+            name: ../roles/system/verify_authorized_key
           vars:
-            verify_ssh_user: "{{ su.name }}"
-            verify_ssh_key: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
+            verify_target_user: "{{ su.name }}"
+            verify_local_pubkey: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}.pub"
+            verify_target_is_root: false
           loop: "{{ server_users }}"
           loop_control:
             loop_var: su
             label: "{{ su.name }} ({{ su.type }})"
+
+      # Глобальные проверки sshd-политики после hardening: password-вход
+      # запрещён ВЕЗДЕ (для root отдельно есть PermitRootLogin=prohibit-
+      # password в verify_authorized_key выше; здесь — для human-юзеров и
+      # дополнительный страховочный слой для root).
+      -   name: Read sshd hardening flags
+          ansible.builtin.shell: |
+            cfg=$(sshd -T 2>/dev/null)
+            pwd=$(echo "$cfg" | awk 'tolower($1)=="passwordauthentication"{print tolower($2); exit}')
+            kbd=$(echo "$cfg" | awk 'tolower($1)=="kbdinteractiveauthentication"{print tolower($2); exit}')
+            echo "passwordauthentication=$pwd"
+            echo "kbdinteractiveauthentication=$kbd"
+          register: _sshd_harden
+          changed_when: false
+
+      -   name: Assert sshd hardening — password+kbd-interactive disabled
+          ansible.builtin.assert:
+            that:
+              - "'passwordauthentication=no' in _sshd_harden.stdout"
+              - "'kbdinteractiveauthentication=no' in _sshd_harden.stdout"
+            fail_msg: |
+              sshd-hardening не применён или откатился.
+              Ожидалось PasswordAuthentication=no, KbdInteractiveAuthentication=no.
+              Получили:
+              {{ _sshd_harden.stdout }}
 
 -   name: Stage 6 - Verify services
     hosts: site

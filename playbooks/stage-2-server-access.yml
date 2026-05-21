@@ -31,19 +31,26 @@
     - ../roles/system/ssh_logs_journald
 
   post_tasks:
-    - name: Verify root SSH login via emergency key
+    # По политике passphrase есть на ВСЕХ ключах кроме automation (Ansible
+    # без passphrase ходить не умеет). Прямой ssh-вход в BatchMode для ключей
+    # с passphrase невозможен → проверяем установлен ли pubkey в
+    # authorized_keys и разрешает ли sshd ключ-вход. Для root дополнительно
+    # сверяем PermitRootLogin.
+    - name: Verify root emergency pubkey installed (indirect — passphrase)
       include_role:
-        name: ../roles/system/verify_ssh
+        name: ../roles/system/verify_authorized_key
       vars:
-        verify_ssh_user: root
-        verify_ssh_key: "{{ emergency_key_path }}"
+        verify_target_user: root
+        verify_local_pubkey: "{{ emergency_pubkey_path }}"
+        verify_target_is_root: true
 
-    - name: Verify each server_user SSH login via its own key
+    - name: Verify each server_user pubkey installed
       include_role:
-        name: ../roles/system/verify_ssh
+        name: ../roles/system/verify_authorized_key
       vars:
-        verify_ssh_user: "{{ su.name }}"
-        verify_ssh_key: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
+        verify_target_user: "{{ su.name }}"
+        verify_local_pubkey: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}.pub"
+        verify_target_is_root: false
       loop: "{{ server_users }}"
       loop_control:
         loop_var: su

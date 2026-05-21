@@ -34,19 +34,26 @@
   gather_facts: true
 
   pre_tasks:
-    - name: Pre-check root SSH login
+    # По политике passphrase есть на ВСЕХ ключах кроме automation (Ansible
+    # без passphrase ходить не умеет). Прямой ssh-вход в BatchMode для ключей
+    # с passphrase невозможен → проверяем косвенно (см. stage-2).
+    # До hardening PermitRootLogin может быть yes или prohibit-password →
+    # strict-режим НЕ включаем (в отличие от post-check ниже).
+    - name: Pre-check root emergency pubkey installed (indirect — passphrase)
       include_role:
-        name: ../roles/system/verify_ssh
+        name: ../roles/system/verify_authorized_key
       vars:
-        verify_ssh_user: root
-        verify_ssh_key: "{{ emergency_key_path }}"
+        verify_target_user: root
+        verify_local_pubkey: "{{ emergency_pubkey_path }}"
+        verify_target_is_root: true
 
-    - name: Pre-check each server_user SSH login
+    - name: Pre-check each server_user pubkey installed
       include_role:
-        name: ../roles/system/verify_ssh
+        name: ../roles/system/verify_authorized_key
       vars:
-        verify_ssh_user: "{{ su.name }}"
-        verify_ssh_key: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
+        verify_target_user: "{{ su.name }}"
+        verify_local_pubkey: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}.pub"
+        verify_target_is_root: false
       loop: "{{ server_users }}"
       loop_control:
         loop_var: su
@@ -58,19 +65,24 @@
     - ../roles/system/unattended_upgrades
 
   post_tasks:
-    - name: Post-check root SSH login after sshd hardening
+    # После hardening PermitRootLogin=prohibit-password → strict-режим:
+    # защита от регрессии (verify_permitroot_strict: true).
+    - name: Post-check root emergency pubkey installed (strict — post-hardening)
       include_role:
-        name: ../roles/system/verify_ssh
+        name: ../roles/system/verify_authorized_key
       vars:
-        verify_ssh_user: root
-        verify_ssh_key: "{{ emergency_key_path }}"
+        verify_target_user: root
+        verify_local_pubkey: "{{ emergency_pubkey_path }}"
+        verify_target_is_root: true
+        verify_permitroot_strict: true
 
-    - name: Post-check each server_user SSH login after sshd hardening
+    - name: Post-check each server_user pubkey installed after sshd hardening
       include_role:
-        name: ../roles/system/verify_ssh
+        name: ../roles/system/verify_authorized_key
       vars:
-        verify_ssh_user: "{{ su.name }}"
-        verify_ssh_key: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
+        verify_target_user: "{{ su.name }}"
+        verify_local_pubkey: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}.pub"
+        verify_target_is_root: false
       loop: "{{ server_users }}"
       loop_control:
         loop_var: su
