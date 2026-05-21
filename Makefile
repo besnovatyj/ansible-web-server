@@ -66,6 +66,7 @@ vault-view: # Просмотр данных в хранилище Ansible Vault
 init-ansible:
 	sudo apt update
 	sudo apt install -y ansible-core python3-pexpect nano sshpass
+	sudo ansible-galaxy collection install community.mysql --upgrade
 	sudo update-alternatives --set editor /bin/nano # Устанавливает nano редактором по-умолчанию для всей системы.
 
 galaxy-install:
