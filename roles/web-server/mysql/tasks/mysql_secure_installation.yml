@@ -1,7 +1,18 @@
 ---
-- name: Установка пакета python3-mysqldb для Debian/Ubuntu (необходим для модулей Ansible)
+# python3-pymysql вместо python3-mysqldb: MySQL 8.4 LTS удалил плагин
+# mysql_native_password, а MySQLdb пытается подключиться через него.
+# pymysql нативно поддерживает caching_sha2_password. Если оба пакета
+# установлены, community.mysql предпочтёт MySQLdb → удаляем его.
+# TODO - кажется, я ам ставил раньше "python3-mysqldb", его не должно быть на чистой системе? Удалить блок удаления?
+- name: Удаление python3-mysqldb (несовместим с MySQL 8.4 — нет mysql_native_password)
   apt:
     name: python3-mysqldb
+    state: absent
+  when: ansible_os_family == 'Debian'
+
+- name: Установка python3-pymysql (необходим для модулей community.mysql)
+  apt:
+    name: python3-pymysql
     state: present
   when: ansible_os_family == 'Debian'
 
@@ -10,115 +21,27 @@
 # и не пустой пароль). Поэтому прежняя ветка «свежая установка = пустой пароль»
 # больше не нужна: всегда подключаемся через unix-socket с известным паролем,
 # задача идемпотентна (повторный прогон ничего не меняет).
-- name: Установка пароля и плагина caching_sha2_password для root@localhost
-  no_log: true
-  mysql_user:
-    name: root
-    password: "{{ mysql_root_password }}"
-    host: localhost
-    check_implicit_admin: true
-    priv: "*.*:ALL,GRANT"
-    state: present
-    plugin: caching_sha2_password
+#
+# community.mysql.mysql_user в связке с MySQL 8.4 LTS ломается: модуль
+# внутренне ссылается на удалённый плагин mysql_native_password при
+# проверке/сравнении хешей пароля (ошибка 1524). Обходим через mysql_query:
+# ALTER USER идемпотентен, GRANT ALL для root — тоже.
+- name: Обеспечить пароль root@localhost (ALTER USER)
+  community.mysql.mysql_query:
     login_user: root
     login_password: "{{ mysql_root_password }}"
     login_unix_socket: /var/run/mysqld/mysqld.sock
-  register: root_user_update
+    query: "ALTER USER 'root'@'localhost' IDENTIFIED BY %(pwd)s"
+    named_args:
+      pwd: "{{ mysql_root_password }}"
+  no_log: true
+  changed_when: false
 
-- name: Ожидание запуска MySQL после установки пароля
-  pause:
-    seconds: 5
-  when: root_user_update is changed
-
-# ============================================================================
-# DEPRECATED / LEGACY HARDENING — кандидат на удаление
-# ----------------------------------------------------------------------------
-# Этот блок реализует старый паттерн mysql_secure_installation (актуальный для
-# MySQL < 5.7): зачистка test-БД, анонимных пользователей и лишних root@host.
-#
-# Современный MySQL 8.4 LTS из APT-репозитория Oracle при первичной
-# инициализации (mysqld --initialize в postinst пакета) создаёт ТОЛЬКО
-# 'root'@'localhost' — БЕЗ анонимных пользователей, БЕЗ базы `test`, БЕЗ
-# дополнительных root@<host>. То есть на чистой установке всем задачам ниже
-# нечего удалять (idempotent no-op): они висят как defensive belt-and-suspenders.
-#
-# Откат на MySQL < 5.7 не планируется (см. project_mysql_84: единый 8.4 dev/prod).
-#
-# TODO: после подтверждения на проде, что чистая установка не содержит test-БД,
-#       анонимов и лишних root@host — удалить весь блок целиком (оставив только
-#       задачу установки пароля root@localhost выше, она остаётся актуальной).
-# ============================================================================
-- name: Безопасная настройка MySQL (удаление test БД и анонимных пользователей)
-  block:
-    - name: Проверка существования тестовой базы данных 'test'
-      mysql_db:
-        name: test
-        state: present
-        login_user: root
-        login_password: "{{ mysql_root_password }}"
-        login_unix_socket: /var/run/mysqld/mysqld.sock
-      register: test_db_check
-      check_mode: yes
-      failed_when: false
-      changed_when: false
-      no_log: true
-
-    - name: Удаление тестовой базы данных 'test'
-      mysql_db:
-        name: test
-        state: absent
-        login_user: root
-        login_password: "{{ mysql_root_password }}"
-        login_unix_socket: /var/run/mysqld/mysqld.sock
-      when: test_db_check.changed
-      no_log: true
-      ignore_errors: "{{ ansible_check_mode }}"
-
-    - name: Проверка наличия анонимных пользователей
-      mysql_user:
-        name: ''
-        host_all: yes
-        state: present
-        login_user: root
-        login_password: "{{ mysql_root_password }}"
-        login_unix_socket: /var/run/mysqld/mysqld.sock
-      check_mode: yes
-      register: anon_users_check
-      failed_when: false
-      changed_when: false
-      no_log: true
-
-    - name: Удаление всех анонимных пользователей
-      mysql_user:
-        name: ''
-        host_all: yes
-        state: absent
-        login_user: root
-        login_password: "{{ mysql_root_password }}"
-        login_unix_socket: /var/run/mysqld/mysqld.sock
-      when: anon_users_check.changed
-      no_log: true
-
-    - name: Получить список всех root@host из mysql.user
-      community.mysql.mysql_query:
-        login_user: root
-        login_password: "{{ mysql_root_password }}"
-        login_unix_socket: /var/run/mysqld/mysqld.sock
-        query: "SELECT Host FROM mysql.user WHERE User = 'root'"
-      register: mysql_root_hosts
-      no_log: true
-
-    - name: Удалить все root-аккаунты, не входящие в keep_mysql_root_hosts
-      mysql_user:
-        name: root
-        host: "{{ item.Host }}"
-        state: absent
-        login_user: root
-        login_password: "{{ mysql_root_password }}"
-        login_unix_socket: /var/run/mysqld/mysqld.sock
-      loop: "{{ mysql_root_hosts.query_result[0] }}"
-      loop_control:
-        label: "root@{{ item.Host }}"
-      when: item.Host not in keep_mysql_root_hosts
-      no_log: true
-  when: mysql_root_password is defined  # Выполнять только если пароль сгенерирован
+- name: Обеспечить привилегии root@localhost (GRANT ALL)
+  community.mysql.mysql_query:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    query: "GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' WITH GRANT OPTION"
+  no_log: true
+  changed_when: false

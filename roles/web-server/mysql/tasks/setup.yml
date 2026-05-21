@@ -1,25 +1,46 @@
 ---
-- name: Create a new database
-  mysql_db:
-    name: "{{ mysql_db_name }}"
-    state: present
+# community.mysql.mysql_db / mysql_user ломаются с MySQL 8.4 LTS:
+# модуль внутренне ссылается на удалённый mysql_native_password.
+# Обходим через mysql_query — все операции идемпотентны.
+- name: Создать БД {{ mysql_db_name }}
+  community.mysql.mysql_query:
     login_user: root
     login_password: "{{ mysql_root_password }}"
     login_unix_socket: /var/run/mysqld/mysqld.sock
+    query: "CREATE DATABASE IF NOT EXISTS `{{ mysql_db_name }}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
   no_log: true
+  changed_when: false
 
-- name: Add user
-  mysql_user:
-    host: localhost
-    name: "{{ mysql_db_user }}"
-    password: "{{ mysql_db_user_password }}"
-    priv: '{{ mysql_db_name }}.*:ALL,GRANT'
-    state: present
+- name: Создать пользователя {{ mysql_db_user }}@localhost
+  community.mysql.mysql_query:
     login_user: root
     login_password: "{{ mysql_root_password }}"
     login_unix_socket: /var/run/mysqld/mysqld.sock
-    plugin: caching_sha2_password  # MySQL 8.4: native_password убран; PHP 8.4 (mysqlnd) поддерживает caching_sha2
-  no_log: yes
+    query: "CREATE USER IF NOT EXISTS '{{ mysql_db_user }}'@'localhost' IDENTIFIED BY %(pwd)s"
+    named_args:
+      pwd: "{{ mysql_db_user_password }}"
+  no_log: true
+  changed_when: false
+
+- name: Обеспечить пароль {{ mysql_db_user }}@localhost
+  community.mysql.mysql_query:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    query: "ALTER USER '{{ mysql_db_user }}'@'localhost' IDENTIFIED BY %(pwd)s"
+    named_args:
+      pwd: "{{ mysql_db_user_password }}"
+  no_log: true
+  changed_when: false
+
+- name: Привилегии {{ mysql_db_user }}@localhost на {{ mysql_db_name }}
+  community.mysql.mysql_query:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    query: "GRANT ALL PRIVILEGES ON `{{ mysql_db_name }}`.* TO '{{ mysql_db_user }}'@'localhost'"
+  no_log: true
+  changed_when: false
 
 - name: Настройка MySQL для низкой памяти
   template:
