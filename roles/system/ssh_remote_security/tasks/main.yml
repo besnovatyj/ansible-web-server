@@ -41,11 +41,12 @@
     owner: root
     group: root
     mode: '0644'
-    # validate использует `sshd -t` — проверяется ВЕСЬ итоговый конфиг
-    # (через Include), поэтому drop-in без HostKey валидируется корректно.
-    # %s в команду не подставляем намеренно: -t -f <drop-in> ругался бы на
-    # отсутствие HostKey в самом файле.
-    validate: '/usr/sbin/sshd -t'
+    # validate здесь не указываем: ansible требует `%s` (путь к temp-файлу),
+    # а `sshd -t -f <drop-in>` упадёт на отсутствии HostKey — drop-in не
+    # самостоятельный конфиг. Полная проверка делается следующим таском
+    # `Validate final sshd config` через обычный `sshd -t` уже по итоговому
+    # конфигу (включая Include). Если он упадёт — handler `Restart SSH`
+    # не выполнится, sshd продолжит работать со старым конфигом.
     content: |
       # Managed by Ansible role: ssh_remote_security. Не редактировать вручную.
       # sshd: первая встретившаяся директива выигрывает; префикс 00- => этот
