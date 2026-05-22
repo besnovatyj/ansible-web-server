@@ -1,63 +1,92 @@
 ---
-- name: Backup SSH configuration
+########################################################################
+# SSH hardening через drop-in.
+#
+# Почему drop-in, а не правка /etc/ssh/sshd_config через lineinfile:
+#   sshd читает директивы в порядке появления, ПЕРВАЯ совпавшая выигрывает
+#   (в отличие от nginx/php-fpm). В /etc/ssh/sshd_config почти первой строкой
+#   стоит `Include /etc/ssh/sshd_config.d/*.conf`, то есть файлы из drop-in
+#   директории читаются РАНЬШЕ тела основного конфига. Поэтому cloud-init,
+#   создающий /etc/ssh/sshd_config.d/50-cloud-init.conf с
+#   `PasswordAuthentication yes` при первой инициализации VM, перебивает
+#   любые правки в /etc/ssh/sshd_config.
+#
+# Решение:
+#   1) Удаляем /etc/ssh/sshd_config.d/50-cloud-init.conf (cloud-init на уже
+#      инициализированной системе свои файлы не перезаписывает).
+#   2) Кладём собственный drop-in /etc/ssh/sshd_config.d/00-hardening.conf —
+#      префикс 00- гарантирует, что он будет прочитан первым из всех файлов
+#      директории. Первая директива выигрывает → наши значения применяются.
+#
+# Плюсы по сравнению со старой схемой с lineinfile:
+#   - не зависим от регэкспов и порядка строк в /etc/ssh/sshd_config;
+#   - переживает `apt upgrade openssh-server` (dpkg трогает основной файл,
+#     drop-in остаётся нашим);
+#   - идемпотентно (copy с фиксированным content);
+#   - одно место правды.
+########################################################################
+
+# cloud-init создаёт этот файл при первом запуске VM, чтобы пользователю
+# не отрезали парольный доступ ДО того, как он положит свой ssh-ключ.
+# После hardening нам он только мешает — там жёстко `PasswordAuthentication yes`.
+- name: Remove cloud-init SSH drop-in (overrides hardening)
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+    state: absent
+  notify: Restart SSH
+
+- name: Deploy SSH hardening drop-in
   ansible.builtin.copy:
-    src: /etc/ssh/sshd_config
-    dest: /etc/ssh/sshd_config.bak
-    remote_src: yes
-    mode: '0600'
+    dest: /etc/ssh/sshd_config.d/00-hardening.conf
+    owner: root
+    group: root
+    mode: '0644'
+    # validate использует `sshd -t` — проверяется ВЕСЬ итоговый конфиг
+    # (через Include), поэтому drop-in без HostKey валидируется корректно.
+    # %s в команду не подставляем намеренно: -t -f <drop-in> ругался бы на
+    # отсутствие HostKey в самом файле.
+    validate: '/usr/sbin/sshd -t'
+    content: |
+      # Managed by Ansible role: ssh_remote_security. Не редактировать вручную.
+      # sshd: первая встретившаяся директива выигрывает; префикс 00- => этот
+      # файл читается раньше всех остальных в /etc/ssh/sshd_config.d/.
 
-# Маленький нюанс для цикла ниже: Если в вашем sshd_config есть блоки Match (например, Match User backup),
-# lineinfile может добавить новые строки в конец файла, то есть внутрь этого блока, что изменит их логику.
-# Если блоков Match нет — схема с циклом ниже рабочая.
-- name: Hardening SSH configuration
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: "^#?{{ item.key }}"
-    line: "{{ item.key }} {{ item.value }}"
-    state: present
-    validate: '/usr/sbin/sshd -t -f %s'
-  loop:
-    # Аутентификация
-    - { key: 'PasswordAuthentication', value: 'no' } # Запрещает вход по паролю для всех пользователей. Вход только по ключам.
-    - { key: 'KbdInteractiveAuthentication', value: 'no' } # Для 2FA (Google Authenticator) или расширенного PAM. Если вы поставите `PasswordAuthentication no`, но оставите `KbdInteractiveAuthentication yes`, вы все равно сможете войти по обычному паролю, так как PAM запросит его через этот «интерактивный» интерфейс.
-    - { key: 'ChallengeResponseAuthentication', value: 'no' } # Это устаревшее название для `KbdInteractiveAuthentication`.
-    - { key: 'PubkeyAuthentication', value: 'yes' } # Включает вход по ключам.
-    - { key: 'PermitRootLogin', value: 'prohibit-password' } # Запрещает вход под root по SSH с помощью пароля. Оставляет возможность входа только по ключу!.
+      # --- Аутентификация ---
+      # Запрещает вход по паролю для всех пользователей. Вход только по ключам.
+      PasswordAuthentication no
+      # Для 2FA (Google Authenticator) или расширенного PAM. Если поставить
+      # PasswordAuthentication=no, но оставить KbdInteractiveAuthentication=yes,
+      # всё равно можно войти по паролю — PAM запросит его через «интерактивный»
+      # интерфейс. Поэтому выключаем оба.
+      KbdInteractiveAuthentication no
+      # Устаревший синоним KbdInteractiveAuthentication, выключаем для совместимости
+      # со старыми клиентами/прокси, которые могут его проверять отдельно.
+      ChallengeResponseAuthentication no
+      # Включает вход по ключам.
+      PubkeyAuthentication yes
+      # Запрещает вход под root по SSH с помощью пароля. Оставляет возможность
+      # входа только по ключу (нужно для emergency_root_key).
+      PermitRootLogin prohibit-password
 
-    # Безопасность и логи
-    - { key: 'LogLevel', value: 'VERBOSE' } # LogLevel VERBOSE в OpenSSH записывает подробную информацию о каждом SSH-соединении, включая аутентификацию, используемые криптографические алгоритмы и начало/окончание сессий.
-    - { key: 'Protocol', value: '2' } # Устанавливает Protocol 2 (хотя в современных версиях OpenSSH это уже стандарт)
+      # --- Безопасность и логи ---
+      # Подробная информация о каждом SSH-соединении: аутентификация,
+      # криптографические алгоритмы, начало/окончание сессий.
+      LogLevel VERBOSE
 
-    # Криптография (Ciphers, MACs, Kex)
-    - { key: 'Ciphers', value: 'aes256-ctr,chacha20-poly1305@openssh.com' } # Настраивает безопасные алгоритмы шифрования
-    - { key: 'MACs', value: 'hmac-sha2-512,hmac-sha2-256' } # Настраивает безопасные MAC-алгоритмы
-    - { key: 'KexAlgorithms', value: 'curve25519-sha256,curve25519-sha256@libssh.org' } # Настраивает безопасные алгоритмы обмена ключами
-    - { key: 'HostKeyAlgorithms', value: 'ssh-ed25519,rsa-sha2-512,rsa-sha2-256' } # Настраивает безопасные алгоритмы хостовых ключей
+      # --- Криптография (Ciphers / MACs / Kex / HostKey) ---
+      Ciphers aes256-ctr,chacha20-poly1305@openssh.com
+      MACs hmac-sha2-512,hmac-sha2-256
+      KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org
+      HostKeyAlgorithms ssh-ed25519,rsa-sha2-512,rsa-sha2-256
 
-    # Тайм-ауты (Подробное описание ниже)
-    - { key: 'ClientAliveInterval', value: '300' } # Период пинга
-    - { key: 'ClientAliveCountMax', value: '3' } # Количество попыток пинга
+      # --- Тайм-ауты ---
+      # Тайм-аут разрыва зависшей сессии: 300 сек × 3 = 15 минут.
+      # Сервер каждые ClientAliveInterval отправляет «пинг» клиенту; если за
+      # ClientAliveCountMax попыток нет ответа — соединение разрывается.
+      ClientAliveInterval 300
+      ClientAliveCountMax 3
   notify: Restart SSH
 
-########################################################################
-# Тайм-аут разрыва соединения: 300 сек × 3 = 15 минут тайм-аут.
-# ClientAliveInterval (300 сек.) × ClientAliveCountMax (3 сек.) = 900 сек (15 мин.)
-# Сервер каждые `ClientAliveInterval` отправляет "пинг" подключённому клиенту, чтобы проверить, что соединение живое.
-# Если клиент не отвечает (сеть упала, клиент завис), соединение автоматически разрывается.
-# Для очистки "зависших" сессий: Если клиент "завис" (браузер крашнулся, сеть упала), сессия не висит "вечно".
-# ClientAliveInterval - период пинга
-# ClientAliveCountMax - количество попыток пинга
-########################################################################
-
-- name: Validate SSH configuration # Выдаст ошибку, если конфиг некорректен
-  ansible.builtin.command: sshd -t
+- name: Validate final sshd config
+  ansible.builtin.command: /usr/sbin/sshd -t
   changed_when: false
-  failed_when: sshd_test.rc != 0
-  register: sshd_test
-  notify: Restart SSH
-
-
-
-
-
-
