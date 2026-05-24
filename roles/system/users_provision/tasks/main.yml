@@ -4,10 +4,13 @@
 # Запускается из stage-1b-bootstrap-keys.yml под root (по паролю — единственный
 # раз). Идемпотентна, безопасна к повторному прогону.
 #
-# Политика (см. 000-ANALYSIS.md §2, §5.3):
-#   type: automation  → пароль `!` (locked), sudo NOPASSWD (drop-in sudoers)
+# Политика (см. 000-ANALYSIS.md §2, §5.3) — про UNIX-АККАУНТ (не про SSH-ключ,
+# у всех ключей одинаково: passphrase + ssh-agent):
+#   type: automation  → пароль `!` (locked: console-вход невозможен),
+#                       sudo NOPASSWD (drop-in sudoers — Ansible не вводит
+#                       sudo-пароль интерактивно)
 #   type: human       → UNIX-пароль из vault (для console/recovery/sudo),
-#                        членство в sudo, sudo С паролем (без NOPASSWD)
+#                       членство в sudo, sudo С паролем (без NOPASSWD)
 #
 # update_password: on_create — повторный прогон НЕ перетирает пароль,
 # изменённый руками на сервере.

@@ -4,16 +4,18 @@
 #
 # Stage 1b: bootstrap (ЕДИНСТВЕННЫЙ плейбук, ходящий по ПАРОЛЮ root)
 #
-#   1) Pre-flight (localhost): vault_root_password задан и не пуст.
-#   2) Detect: пробуем зайти automation-ключом. Если уже можем —
+#   1) Pre-flight (localhost): vault_root_password задан и не пуст;
+#      ssh-agent поднят и содержит automation-ключ (нужен для probe + verify).
+#   2) Detect: пробуем зайти automation-ключом через агента. Если уже можем —
 #      bootstrap не нужен (повторный/идемпотентный прогон).
 #   3) Bootstrap по паролю root (только если нужно):
 #      - users_provision: создаёт всех server_users (+ sudo, + пароли);
 #      - ssh_push_keys:  раскладывает публичные ключи (+ emergency root).
-#   4) Verify: automation-вход по ключу работает.
+#   4) Verify: automation-вход по ключу работает (через ssh-agent).
 #
 # После этого парольный доступ Ansible больше НЕ нужен — все остальные
-# стадии ходят automation-пользователем по ключу (см. inventory/hosts.yml).
+# стадии ходят automation-пользователем по ключу (см. inventory/hosts.yml),
+# passphrase разлочен в ssh-agent один раз через `make agent-up`.
 #
 # Запускать ПЕРВЫМ среди remote-стадий (сразу после stage-0).
 # Требует `sshpass` на контроллере (парольная аутентификация SSH).
@@ -44,13 +46,27 @@
 - name: Detect connectivity mode
   hosts: site
   gather_facts: false
+  pre_tasks:
+    # Pre-flight: ssh-agent должен быть поднят с automation-ключом — иначе
+    # probe ниже всегда вернёт rc!=0 и Ansible полезет в bootstrap, после чего
+    # упадёт finальный verify_ssh. Списком только automation: bes и emergency
+    # понадобятся в stage-2 и далее, проверим там.
+    - name: Pre-flight - SSH agent готов и automation-ключ заряжен
+      ansible.builtin.include_role:
+        name: ../roles/system/ssh_agent_check
+      vars:
+        ssh_agent_required_pubkeys:
+          - "{{ automation_key_path }}.pub"
+
   tasks:
     - name: Probe key-based login as automation user
       delegate_to: localhost
-      # IdentitiesOnly=yes — если в шелле пользователя уже есть свой
-      # ssh-agent с чужими ключами, без этой опции клиент сначала предложит
-      # их все, упрётся в серверный MaxAuthTries (default=6) и не дойдёт до
-      # нашего -i. Stage-1b делается без `make agent-up`, поэтому страхуемся.
+      # SSH_AUTH_SOCK явно прокидываем (subprocess унаследовал бы и так — но
+      # пусть зависимость от агента видна в коде). IdentitiesOnly=yes — клиент
+      # предлагает ТОЛЬКО наш -i, агент даёт подпись (passphrase разлочен
+      # `make agent-up`).
+      environment:
+        SSH_AUTH_SOCK: "{{ lookup('env', 'SSH_AUTH_SOCK') }}"
       command: >-
         ssh -i {{ automation_key_path }}
             -o IdentitiesOnly=yes

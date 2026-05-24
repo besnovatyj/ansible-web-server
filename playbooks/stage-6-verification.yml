@@ -32,7 +32,6 @@
         ssh_agent_required_pubkeys: >-
           {{ [emergency_pubkey_path] +
              (server_users
-              | selectattr('type', 'equalto', 'human')
               | map(attribute='name')
               | map('regex_replace', '^', local_ssh_keys_dir + '/key_' + domain_name + '_')
               | map('regex_replace', '$', '.pub')

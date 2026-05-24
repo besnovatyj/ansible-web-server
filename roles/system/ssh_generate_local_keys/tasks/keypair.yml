@@ -2,7 +2,9 @@
 # Генерация ОДНОЙ пары ключей. Вход (vars):
 #   kp_label      — человекочитаемая метка (для debug)
 #   kp_path       — путь к приватному ключу (публичный = kp_path + ".pub")
-#   kp_passphrase — passphrase ("" = без passphrase)
+#   kp_passphrase — passphrase из vault. Пустая строка недопустима по политике
+#                   (даже automation-ключ защищён passphrase, разлочивается
+#                   через ssh-agent — см. main.yml).
 #
 # Логика идентична прежней (на пару ordinary/emergency), вынесена сюда ради
 # цикла по server_users.
@@ -56,7 +58,7 @@
     path: "{{ kp_path }}"
     type: "{{ ssh_key_type }}"  # ed25519 или rsa
     size: "{{ ssh_key_size }}"  # 0 для ed25519, 4096 для rsa
-    passphrase: "{{ kp_passphrase }}"  # "" = без passphrase (automation); из vault — human/emergency
+    passphrase: "{{ kp_passphrase }}"  # обязательно из vault — пустая строка запрещена политикой
     force: "{{ force_key_regen | default(false) }}"  # Перезаписывать только если force=true
     state: present
   when:

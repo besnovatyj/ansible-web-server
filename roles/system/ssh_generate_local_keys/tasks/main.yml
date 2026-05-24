@@ -5,9 +5,9 @@
 # 1. Проверяется существование директории для ключей.
 # 2. Получается текущая дата/время для именования бэкапов.
 # 3. Для каждого пользователя из server_users генерируется своя пара ключей
-#    (см. keypair.yml). passphrase:
-#      - automation → "" (Ansible ходит этим ключом — passphrase недопустим);
-#      - human      → значение vault-переменной из key_passphrase_vault_key.
+#    (см. keypair.yml). passphrase — из vault-переменной key_passphrase_vault_key
+#    у каждого пользователя (включая automation: для Ansible passphrase
+#    разлочивается заранее через ssh-agent — `make agent-up`).
 # 4. Отдельно генерируется аварийная пара для root (passphrase из vault).
 # 5. На одну пару логика не изменилась (проверка наличия → бэкап при
 #    force_key_regen → генерация) и вынесена в keypair.yml.
@@ -44,8 +44,8 @@
   vars:
     kp_label: "{{ su.name }} ({{ su.type }})"
     kp_path: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
-    # automation → без passphrase; human → passphrase из его vault-переменной.
-    kp_passphrase: "{{ ssh_key_passphrase if su.type == 'automation' else lookup('vars', su.key_passphrase_vault_key) }}"
+    # Passphrase у ВСЕХ ключей — из соответствующей vault-переменной.
+    kp_passphrase: "{{ lookup('vars', su.key_passphrase_vault_key) }}"
 
 # Аварийная пара ключей для root (passphrase из vault; Ansible ею не ходит).
 - name: Generate emergency root keypair
