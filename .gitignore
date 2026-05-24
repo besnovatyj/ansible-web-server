@@ -4,3 +4,5 @@
 /secrets/!vault_pass.txt
 /secrets/secrets.yml
 /inventory/group_vars/all/secrets
+# ssh-agent env, создаётся `make agent-up`; per-сессия, не в git.
+/.agent.env

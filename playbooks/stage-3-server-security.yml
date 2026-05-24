@@ -3,14 +3,17 @@
 # **Цель**: Hardening. Запускать **только после** успешного Stage 2.
 #
 # Stage 3: hardening
-# 1) **pre-check** assert: SSH-ключи работают (повторная проверка)
+# 1) **pre-check** реальный SSH-вход root + всех server_users (через
+#    ssh-agent — `make agent-up` заряжает passphrase-ключи). Sshd-политика
+#    в non-strict режиме (до hardening допустим PermitRootLogin=yes).
 # 2) `ufw` Фаервол
 # 3) `fail2ban` IPS (fail2ban sshd jail включать **после** проверки ключей)
 # 4) `ssh_remote_security` Отключение пароля, hardening ciphers/MACs/Kex
 #    (PermitRootLogin остаётся prohibit-password — root по ключу с passphrase)
 # 5) `unattended_upgrades` Авто security-патчи + ночной авто-ребут (fire-and-forget)
-# 6) **post-check** Проверка что SSH по ключу всё ещё работает после hardening
-# 7) app_armor` (опционально) MAC-профили в режиме **complain** сначала
+# 6) **post-check** реальный SSH-вход root + всех server_users + sshd-политика
+#    в strict-режиме (PermitRootLogin строго prohibit-password|without-password)
+# 7) `app_armor` (опционально) MAC-профили в режиме **complain** сначала
 #
 # Подключение automation-пользователем по ключу (sudo NOPASSWD).
 # Запускать ТОЛЬКО после успешного Stage 2.
@@ -22,10 +25,23 @@
   gather_facts: false
   tasks:
     - name: Assert essential variables
-      assert:
+      ansible.builtin.assert:
         that:
           - server_users is defined and server_users | length > 0
         fail_msg: "server_users не задан"
+
+    - name: Pre-flight - SSH agent готов и ключи заряжены
+      ansible.builtin.include_role:
+        name: ../roles/system/ssh_agent_check
+      vars:
+        ssh_agent_required_pubkeys: >-
+          {{ [emergency_pubkey_path] +
+             (server_users
+              | selectattr('type', 'equalto', 'human')
+              | map(attribute='name')
+              | map('regex_replace', '^', local_ssh_keys_dir + '/key_' + domain_name + '_')
+              | map('regex_replace', '$', '.pub')
+              | list) }}
 
 - name: Stage 3 - Security hardening
   hosts: site
@@ -34,25 +50,37 @@
   gather_facts: true
 
   pre_tasks:
-    # По политике passphrase есть на ВСЕХ ключах кроме automation (Ansible
-    # без passphrase ходить не умеет). Прямой ssh-вход в BatchMode для ключей
-    # с passphrase невозможен → проверяем косвенно (см. stage-2).
-    # До hardening PermitRootLogin может быть yes или prohibit-password →
-    # strict-режим НЕ включаем (в отличие от post-check ниже).
-    - name: Pre-check root emergency pubkey installed (indirect — passphrase)
-      include_role:
-        name: ../roles/system/verify_authorized_key
+    - name: Pre-check root login via emergency key
+      ansible.builtin.include_role:
+        name: ../roles/system/verify_ssh
+      vars:
+        verify_ssh_user: root
+        verify_ssh_key: "{{ emergency_key_path }}"
+
+    - name: Pre-check sshd policy for root (non-strict — pre-hardening)
+      ansible.builtin.include_role:
+        name: ../roles/system/verify_sshd_policy
       vars:
         verify_target_user: root
-        verify_local_pubkey: "{{ emergency_pubkey_path }}"
         verify_target_is_root: true
+        verify_permitroot_strict: false
 
-    - name: Pre-check each server_user pubkey installed
-      include_role:
-        name: ../roles/system/verify_authorized_key
+    - name: Pre-check each server_user SSH login via own key
+      ansible.builtin.include_role:
+        name: ../roles/system/verify_ssh
+      vars:
+        verify_ssh_user: "{{ su.name }}"
+        verify_ssh_key: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
+      loop: "{{ server_users }}"
+      loop_control:
+        loop_var: su
+        label: "{{ su.name }} ({{ su.type }})"
+
+    - name: Pre-check sshd policy per server_user (non-strict — pre-hardening)
+      ansible.builtin.include_role:
+        name: ../roles/system/verify_sshd_policy
       vars:
         verify_target_user: "{{ su.name }}"
-        verify_local_pubkey: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}.pub"
         verify_target_is_root: false
       loop: "{{ server_users }}"
       loop_control:
@@ -65,23 +93,39 @@
     - ../roles/system/unattended_upgrades
 
   post_tasks:
-    # После hardening PermitRootLogin=prohibit-password → strict-режим:
-    # защита от регрессии (verify_permitroot_strict: true).
-    - name: Post-check root emergency pubkey installed (strict — post-hardening)
-      include_role:
-        name: ../roles/system/verify_authorized_key
+    # После hardening: реальный SSH-вход всех ключей + sshd-политика в
+    # strict-режиме (защита от регрессии PermitRootLogin).
+    - name: Post-check root login via emergency key
+      ansible.builtin.include_role:
+        name: ../roles/system/verify_ssh
+      vars:
+        verify_ssh_user: root
+        verify_ssh_key: "{{ emergency_key_path }}"
+
+    - name: Post-check sshd policy for root (strict — post-hardening)
+      ansible.builtin.include_role:
+        name: ../roles/system/verify_sshd_policy
       vars:
         verify_target_user: root
-        verify_local_pubkey: "{{ emergency_pubkey_path }}"
         verify_target_is_root: true
         verify_permitroot_strict: true
 
-    - name: Post-check each server_user pubkey installed after sshd hardening
-      include_role:
-        name: ../roles/system/verify_authorized_key
+    - name: Post-check each server_user SSH login via own key
+      ansible.builtin.include_role:
+        name: ../roles/system/verify_ssh
+      vars:
+        verify_ssh_user: "{{ su.name }}"
+        verify_ssh_key: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
+      loop: "{{ server_users }}"
+      loop_control:
+        loop_var: su
+        label: "{{ su.name }} ({{ su.type }})"
+
+    - name: Post-check sshd policy per server_user (strict — post-hardening)
+      ansible.builtin.include_role:
+        name: ../roles/system/verify_sshd_policy
       vars:
         verify_target_user: "{{ su.name }}"
-        verify_local_pubkey: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}.pub"
         verify_target_is_root: false
       loop: "{{ server_users }}"
       loop_control:
@@ -102,18 +146,18 @@
   # Post-conditions: firewall и IPS реально подняты (см. TODO/000-NOTES.MD).
   post_tasks:
     - name: Get UFW status
-      command: ufw status
+      ansible.builtin.command: ufw status
       register: ufw_status
       changed_when: false
 
     - name: Assert UFW is active
-      assert:
+      ansible.builtin.assert:
         that:
           - "'Status: active' in ufw_status.stdout"
         fail_msg: "UFW не активен. ufw status: {{ ufw_status.stdout }}"
 
     - name: Assert fail2ban sshd jail is up
-      command: fail2ban-client status sshd
+      ansible.builtin.command: fail2ban-client status sshd
       register: f2b_sshd
       changed_when: false
       failed_when: f2b_sshd.rc != 0
@@ -123,12 +167,12 @@
     # фатал). Роль уже валидирует apt.conf.d через apt-config dump — здесь
     # enforcing-проверка боевого результата.
     - name: Get APT::Periodic::Unattended-Upgrade value
-      command: apt-config dump APT::Periodic::Unattended-Upgrade
+      ansible.builtin.command: apt-config dump APT::Periodic::Unattended-Upgrade
       register: uu_periodic
       changed_when: false
 
     - name: Assert unattended-upgrade is scheduled
-      assert:
+      ansible.builtin.assert:
         that:
           - '''APT::Periodic::Unattended-Upgrade "1"'' in uu_periodic.stdout'
         fail_msg: >-
@@ -136,7 +180,7 @@
           apt-config dump: {{ uu_periodic.stdout }}
 
     - name: Assert apt-daily-upgrade timer is active
-      command: systemctl is-active apt-daily-upgrade.timer
+      ansible.builtin.command: systemctl is-active apt-daily-upgrade.timer
       register: uu_timer
       changed_when: false
       failed_when: uu_timer.stdout | trim != 'active'
@@ -144,7 +188,7 @@
     # Сухой прогон: end-to-end проверка — конфиг парсится, origins резолвятся,
     # ошибок нет. rc != 0 = битая конфигурация unattended-upgrades.
     - name: Dry-run unattended-upgrade (config sanity)
-      command: unattended-upgrade --dry-run
+      ansible.builtin.command: unattended-upgrade --dry-run
       register: uu_dry
       changed_when: false
       failed_when: uu_dry.rc != 0

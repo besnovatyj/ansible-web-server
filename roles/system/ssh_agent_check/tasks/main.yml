@@ -1,0 +1,63 @@
+##
+# Pre-flight: убеждаемся, что ssh-agent поднят (`make agent-up`) и в нём
+# заряжены все ключи с passphrase, которые понадобятся текущему плейбуку.
+#
+# Зачем: Ansible не вводит passphrase у ssh-ключей. После `make agent-up`
+# контроллер видит SSH_AUTH_SOCK, агент держит разлоченные приватки в памяти.
+# Если SSH_AUTH_SOCK не выставлен или нужный ключ не заряжен — verify_ssh
+# (а также основной коннект Ansible в Phase 2 для automation) упадёт на
+# «Permission denied (publickey)» без понятного объяснения почему. Эта роль
+# даёт fail-fast с однозначным сообщением.
+#
+# Параметры:
+#   ssh_agent_required_pubkeys (list[str]) — пути к .pub-файлам, для каждого
+#       проверяется, что fingerprint есть в выводе `ssh-add -l`.
+##
+---
+- name: "ssh_agent_check: assert SSH_AUTH_SOCK exported on controller"
+  delegate_to: localhost
+  become: false
+  ansible.builtin.assert:
+    that:
+      - lookup('env', 'SSH_AUTH_SOCK') | length > 0
+    fail_msg: |
+      SSH_AUTH_SOCK не выставлен. ssh-agent не поднят или не передан
+      в окружение ansible-playbook. Запустите `make agent-up` и повторите.
+      Если запускали не через make — выполните `. ./.agent.env` в текущей
+      оболочке перед `ansible-playbook`.
+    success_msg: "SSH_AUTH_SOCK выставлен."
+
+- name: "ssh_agent_check: list keys loaded in agent"
+  delegate_to: localhost
+  become: false
+  environment:
+    SSH_AUTH_SOCK: "{{ lookup('env', 'SSH_AUTH_SOCK') }}"
+  ansible.builtin.command: ssh-add -l
+  register: _agent_loaded
+  changed_when: false
+  # rc=1 — агент пуст; не валим тут, валит assert ниже с понятным сообщением.
+  # rc=2 — нет связи с агентом (мёртвый сокет); тоже выйдет в assert.
+  failed_when: false
+
+- name: "ssh_agent_check: read fingerprint for each required pubkey"
+  delegate_to: localhost
+  become: false
+  ansible.builtin.command: "ssh-keygen -lf {{ item }}"
+  register: _required_fprs
+  changed_when: false
+  loop: "{{ ssh_agent_required_pubkeys }}"
+
+- name: "ssh_agent_check: assert each required key is loaded in agent"
+  ansible.builtin.assert:
+    that:
+      - (item.stdout | regex_search('SHA256:[^ ]+')) in _agent_loaded.stdout
+    fail_msg: |
+      Ключ {{ item.item }} НЕ загружен в ssh-agent
+      (ожидаемый fingerprint: {{ item.stdout | regex_search('SHA256:[^ ]+') }}).
+      Текущее содержимое агента:
+      {{ _agent_loaded.stdout | default('(пусто или агент недоступен)') }}
+      Запустите `make agent-up` — он добавит недостающие ключи.
+    success_msg: "Ключ {{ item.item }} в агенте."
+  loop: "{{ _required_fprs.results }}"
+  loop_control:
+    label: "{{ item.item }}"

@@ -1,0 +1,91 @@
+##
+# Проверка эффективной политики sshd (после возможных drop-in'ов) для
+# указанного пользователя:
+#   - PubkeyAuthentication=yes
+#   - PermitRootLogin (если target == root): strict-режим различает
+#       prohibit-password|without-password vs yes;
+#   - AllowUsers (если задан): должен содержать пользователя;
+#   - DenyUsers (если задан): НЕ должен содержать пользователя.
+#
+# Источник правды — `sshd -T`: печатает эффективные значения опций после
+# объединения /etc/ssh/sshd_config + всех Include'ов (drop-in'ы из
+# /etc/ssh/sshd_config.d/), в Bourne-формате "key value" по одной на строку
+# (ключ всегда lower-case).
+#
+# Параметры:
+#   verify_target_user (str)              — имя пользователя
+#   verify_target_is_root (bool=false)    — проверять ли PermitRootLogin
+#   verify_permitroot_strict (bool=false) — strict: только prohibit-password|
+#                                           without-password (для Stage-6
+#                                           после hardening); false разрешает
+#                                           ещё `yes` (для Stage-2/3 pre-check).
+##
+---
+- name: "verify_sshd_policy[{{ verify_target_user }}]: read effective sshd config"
+  ansible.builtin.command: sshd -T
+  register: _sshd_t
+  changed_when: false
+
+- name: "verify_sshd_policy[{{ verify_target_user }}]: parse to dict"
+  ansible.builtin.set_fact:
+    # Каждая строка `sshd -T` = `key value[ value...]` (lowercase key).
+    # split(' ', 1) даёт [key, rest] (rest — оставшаяся часть строки целиком).
+    # Для list-valued опций (allowusers, denyusers и т.д.) rest = "u1 u2 u3" —
+    # split() без аргументов ниже даст список юзеров.
+    _sshd_cfg: >-
+      {{
+        dict(
+          _sshd_t.stdout_lines
+          | select('match', '^[^ ]+ ')
+          | map('split', ' ', 1)
+          | list
+        )
+      }}
+
+- name: "verify_sshd_policy[{{ verify_target_user }}]: assert PubkeyAuthentication=yes"
+  ansible.builtin.assert:
+    that:
+      - _sshd_cfg.pubkeyauthentication | default('') == 'yes'
+    fail_msg: "PubkeyAuthentication={{ _sshd_cfg.pubkeyauthentication | default('(unset)') }} — ключевой вход выключен."
+    success_msg: "PubkeyAuthentication=yes"
+
+- name: "verify_sshd_policy[{{ verify_target_user }}]: assert PermitRootLogin (strict-aware)"
+  ansible.builtin.assert:
+    that:
+      - _sshd_cfg.permitrootlogin | default('') in _allowed_prl
+    fail_msg: >-
+      PermitRootLogin={{ _sshd_cfg.permitrootlogin | default('(unset)') }}
+      не входит в допустимый набор {{ _allowed_prl }}
+      (strict={{ verify_permitroot_strict | default(false) | bool }}).
+    success_msg: "PermitRootLogin={{ _sshd_cfg.permitrootlogin }} (допустимо)"
+  vars:
+    # strict=true (Stage-6 после hardening): только prohibit-password или
+    # without-password (устаревший синоним до OpenSSH 7.0; sshd -T может
+    # вернуть любой из двух в зависимости от версии). `yes` тоже разрешает
+    # ключ-вход, но допускает регрессию политики → запрещён в strict.
+    _allowed_prl: >-
+      {{ ['prohibit-password', 'without-password']
+         if (verify_permitroot_strict | default(false) | bool)
+         else ['yes', 'prohibit-password', 'without-password'] }}
+  when: verify_target_is_root | default(false) | bool
+
+- name: "verify_sshd_policy[{{ verify_target_user }}]: assert AllowUsers includes user"
+  ansible.builtin.assert:
+    that:
+      - verify_target_user in (_sshd_cfg.allowusers | split())
+    fail_msg: >-
+      AllowUsers=[{{ _sshd_cfg.allowusers }}] не содержит
+      {{ verify_target_user }}.
+    success_msg: "AllowUsers содержит {{ verify_target_user }}"
+  # Если AllowUsers не задан — sshd -T не печатает эту строку, и dict не
+  # содержит ключа. Тогда ограничения по списку нет → пропускаем.
+  when: _sshd_cfg.allowusers | default('') | length > 0
+
+- name: "verify_sshd_policy[{{ verify_target_user }}]: assert DenyUsers excludes user"
+  ansible.builtin.assert:
+    that:
+      - verify_target_user not in (_sshd_cfg.denyusers | split())
+    fail_msg: >-
+      DenyUsers=[{{ _sshd_cfg.denyusers }}] содержит {{ verify_target_user }}.
+    success_msg: "DenyUsers не содержит {{ verify_target_user }}"
+  when: _sshd_cfg.denyusers | default('') | length > 0

@@ -47,8 +47,13 @@
   tasks:
     - name: Probe key-based login as automation user
       delegate_to: localhost
+      # IdentitiesOnly=yes — если в шелле пользователя уже есть свой
+      # ssh-agent с чужими ключами, без этой опции клиент сначала предложит
+      # их все, упрётся в серверный MaxAuthTries (default=6) и не дойдёт до
+      # нашего -i. Stage-1b делается без `make agent-up`, поэтому страхуемся.
       command: >-
         ssh -i {{ automation_key_path }}
+            -o IdentitiesOnly=yes
             -o BatchMode=yes
             -o ConnectTimeout=8
             -o StrictHostKeyChecking=accept-new

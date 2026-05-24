@@ -5,7 +5,9 @@
 #
 # Stage 6: комплексная проверка сервера
 # ENFORCING (падает при провале):
-# - SSH: подключение root (аварийный ключ) и каждого server_user (свой ключ)
+# - SSH: реальный вход root (emergency-ключ) и каждого server_user (свой ключ)
+#   через ssh-agent — passphrase-ключи разлочены `make agent-up`
+# - Sshd-политика в strict-режиме (PermitRootLogin строго prohibit-password)
 # - Сервисы active: nginx, php-fpm, mysql, redis, memcached, ufw, fail2ban
 # - UFW active, fail2ban sshd jail поднят
 # - PHP: критичные модули загружены (Zend OPcache, apcu, redis, pdo_mysql, …)
@@ -19,171 +21,209 @@
 #
 ##########################################################
 ---
--   name: Stage 6 - Verify SSH access
-    hosts: site
-    gather_facts: false
-    remote_user: "{{ ssh_automation_user }}"
-    become: true
-    tasks:
-      # По политике passphrase есть на ВСЕХ ключах кроме automation; прямой
-      # ssh-вход в BatchMode невозможен → проверяем косвенно (см. stage-2).
-      # В Stage-6 включаем strict-режим: после hardening должно быть строго
-      # PermitRootLogin=prohibit-password (yes разрешает ключ, но допускает
-      # регрессию политики).
-      -   name: Verify root emergency pubkey installed (strict — post-hardening)
-          include_role:
-            name: ../roles/system/verify_authorized_key
-          vars:
-            verify_target_user: root
-            verify_local_pubkey: "{{ emergency_pubkey_path }}"
-            verify_target_is_root: true
-            verify_permitroot_strict: true
+- name: Stage 6 pre-flight — ssh-agent
+  hosts: site
+  gather_facts: false
+  tasks:
+    - name: Pre-flight - SSH agent готов и ключи заряжены
+      ansible.builtin.include_role:
+        name: ../roles/system/ssh_agent_check
+      vars:
+        ssh_agent_required_pubkeys: >-
+          {{ [emergency_pubkey_path] +
+             (server_users
+              | selectattr('type', 'equalto', 'human')
+              | map(attribute='name')
+              | map('regex_replace', '^', local_ssh_keys_dir + '/key_' + domain_name + '_')
+              | map('regex_replace', '$', '.pub')
+              | list) }}
 
-      -   name: Verify each server_user pubkey installed
-          include_role:
-            name: ../roles/system/verify_authorized_key
-          vars:
-            verify_target_user: "{{ su.name }}"
-            verify_local_pubkey: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}.pub"
-            verify_target_is_root: false
-          loop: "{{ server_users }}"
-          loop_control:
-            loop_var: su
-            label: "{{ su.name }} ({{ su.type }})"
+- name: Stage 6 - Verify SSH access
+  hosts: site
+  gather_facts: false
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
+  tasks:
+    # Реальный SSH-вход root по emergency-ключу + strict sshd-политика
+    # (PermitRootLogin=prohibit-password — защита от регрессии после hardening).
+    - name: Verify root login via emergency key
+      ansible.builtin.include_role:
+        name: ../roles/system/verify_ssh
+      vars:
+        verify_ssh_user: root
+        verify_ssh_key: "{{ emergency_key_path }}"
 
-      # Глобальные проверки sshd-политики после hardening: password-вход
-      # запрещён ВЕЗДЕ (для root отдельно есть PermitRootLogin=prohibit-
-      # password в verify_authorized_key выше; здесь — для human-юзеров и
-      # дополнительный страховочный слой для root).
-      -   name: Read sshd hardening flags
-          ansible.builtin.shell: |
-            cfg=$(sshd -T 2>/dev/null)
-            pwd=$(echo "$cfg" | awk 'tolower($1)=="passwordauthentication"{print tolower($2); exit}')
-            kbd=$(echo "$cfg" | awk 'tolower($1)=="kbdinteractiveauthentication"{print tolower($2); exit}')
-            echo "passwordauthentication=$pwd"
-            echo "kbdinteractiveauthentication=$kbd"
-          register: _sshd_harden
-          changed_when: false
+    - name: Verify sshd policy for root (strict — post-hardening)
+      ansible.builtin.include_role:
+        name: ../roles/system/verify_sshd_policy
+      vars:
+        verify_target_user: root
+        verify_target_is_root: true
+        verify_permitroot_strict: true
 
-      -   name: Assert sshd hardening — password+kbd-interactive disabled
-          ansible.builtin.assert:
-            that:
-              - "'passwordauthentication=no' in _sshd_harden.stdout"
-              - "'kbdinteractiveauthentication=no' in _sshd_harden.stdout"
-            fail_msg: |
-              sshd-hardening не применён или откатился.
-              Ожидалось PasswordAuthentication=no, KbdInteractiveAuthentication=no.
-              Получили:
-              {{ _sshd_harden.stdout }}
+    - name: Verify each server_user SSH login via own key
+      ansible.builtin.include_role:
+        name: ../roles/system/verify_ssh
+      vars:
+        verify_ssh_user: "{{ su.name }}"
+        verify_ssh_key: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
+      loop: "{{ server_users }}"
+      loop_control:
+        loop_var: su
+        label: "{{ su.name }} ({{ su.type }})"
 
--   name: Stage 6 - Verify services
-    hosts: site
-    remote_user: "{{ ssh_automation_user }}"
-    become: true
-    gather_facts: true
-    tasks:
-      -   name: Check critical services are active
-          command: systemctl is-active {{ item }}
-          register: svc_status
-          changed_when: false
-          failed_when: svc_status.stdout != 'active'
-          loop:
-            - nginx
-            - "php{{ php_version }}-fpm"
-            - mysql
-            - redis-server
-            - memcached
-            - ufw
-            - fail2ban
+    - name: Verify sshd policy per server_user (strict — post-hardening)
+      ansible.builtin.include_role:
+        name: ../roles/system/verify_sshd_policy
+      vars:
+        verify_target_user: "{{ su.name }}"
+        verify_target_is_root: false
+      loop: "{{ server_users }}"
+      loop_control:
+        loop_var: su
+        label: "{{ su.name }} ({{ su.type }})"
 
-      -   name: List listening TCP ports
-          command: ss -tlnp
-          register: listening
-          changed_when: false
+    # Глобальные флаги hardening: password+kbd-interactive аутентификация
+    # запрещена для всех. Это страховочный слой поверх per-user проверок
+    # (AllowUsers/PermitRootLogin) — даже если допустим user окажется
+    # некорректно настроен, общий запрет password-вхождения остаётся.
+    - name: Read sshd hardening flags
+      ansible.builtin.command: sshd -T
+      register: _sshd_t
+      changed_when: false
 
-      -   name: Show listening ports
-          debug:
-            var: listening.stdout_lines
+    - name: Parse sshd hardening flags
+      ansible.builtin.set_fact:
+        _sshd_cfg: >-
+          {{
+            dict(
+              _sshd_t.stdout_lines
+              | select('match', '^[^ ]+ ')
+              | map('split', ' ', 1)
+              | list
+            )
+          }}
 
-      -   name: Check PHP modules
-          command: "php -m"
-          register: php_mods
-          changed_when: false
+    - name: Assert sshd hardening — password+kbd-interactive disabled
+      ansible.builtin.assert:
+        that:
+          - _sshd_cfg.passwordauthentication == 'no'
+          - _sshd_cfg.kbdinteractiveauthentication == 'no'
+        fail_msg: |
+          sshd-hardening не применён или откатился.
+          Ожидалось PasswordAuthentication=no, KbdInteractiveAuthentication=no.
+          Получили:
+            PasswordAuthentication={{ _sshd_cfg.passwordauthentication | default('(unset)') }}
+            KbdInteractiveAuthentication={{ _sshd_cfg.kbdinteractiveauthentication | default('(unset)') }}
 
-      -   name: Show PHP modules
-          debug:
-            var: php_mods.stdout_lines
+- name: Stage 6 - Verify services
+  hosts: site
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Check critical services are active
+      ansible.builtin.command: systemctl is-active {{ item }}
+      register: svc_status
+      changed_when: false
+      failed_when: svc_status.stdout != 'active'
+      loop:
+        - nginx
+        - "php{{ php_version }}-fpm"
+        - mysql
+        - redis-server
+        - memcached
+        - ufw
+        - fail2ban
 
-      -   name: Assert critical PHP modules are loaded
-          assert:
-            that:
-              - item in php_mods.stdout
-            fail_msg: "PHP-модуль '{{ item }}' не загружен (нет в `php -m`)."
-          loop:
-            - Zend OPcache
-            - apcu
-            - redis
-            - pdo_mysql
-            - mbstring
-            - intl
+    - name: List listening TCP ports
+      ansible.builtin.command: ss -tlnp
+      register: listening
+      changed_when: false
 
-      -   name: Check UFW status
-          command: ufw status verbose
-          register: ufw_status
-          changed_when: false
+    - name: Show listening ports
+      ansible.builtin.debug:
+        var: listening.stdout_lines
 
-      -   name: Show UFW status
-          debug:
-            var: ufw_status.stdout_lines
+    - name: Check PHP modules
+      ansible.builtin.command: "php -m"
+      register: php_mods
+      changed_when: false
 
-      -   name: Assert UFW is active
-          assert:
-            that:
-              - "'Status: active' in ufw_status.stdout"
-            fail_msg: "UFW не активен."
+    - name: Show PHP modules
+      ansible.builtin.debug:
+        var: php_mods.stdout_lines
 
-      -   name: Check fail2ban-client status
-          command: fail2ban-client status
-          register: f2b_status
-          changed_when: false
-          failed_when: f2b_status.rc != 0
+    - name: Assert critical PHP modules are loaded
+      ansible.builtin.assert:
+        that:
+          - item in php_mods.stdout
+        fail_msg: "PHP-модуль '{{ item }}' не загружен (нет в `php -m`)."
+      loop:
+        - Zend OPcache
+        - apcu
+        - redis
+        - pdo_mysql
+        - mbstring
+        - intl
 
-      -   name: Show fail2ban status
-          debug:
-            var: f2b_status.stdout_lines
+    - name: Check UFW status
+      ansible.builtin.command: ufw status verbose
+      register: ufw_status
+      changed_when: false
 
-      -   name: Assert fail2ban sshd jail is up
-          command: fail2ban-client status sshd
-          register: f2b_sshd
-          changed_when: false
-          failed_when: f2b_sshd.rc != 0
+    - name: Show UFW status
+      ansible.builtin.debug:
+        var: ufw_status.stdout_lines
 
--   name: Stage 6 - HTTP/HTTPS smoke
-    hosts: site
-    gather_facts: false
-    remote_user: "{{ ssh_automation_user }}"
-    become: true
-    tasks:
-      -   name: HTTP probe (80)
-          uri:
-            url: "http://{{ domain_name }}/"
-            status_code: [ 200, 301, 302, 308, 404 ]
-            validate_certs: false
-            timeout: 10
-          register: http_probe
-          failed_when: false
+    - name: Assert UFW is active
+      ansible.builtin.assert:
+        that:
+          - "'Status: active' in ufw_status.stdout"
+        fail_msg: "UFW не активен."
 
-      -   name: HTTPS probe (443)
-          uri:
-            url: "https://{{ domain_name }}/"
-            status_code: [ 200, 301, 302, 308, 404 ]
-            validate_certs: false
-            timeout: 10
-          register: https_probe
-          failed_when: false
+    - name: Check fail2ban-client status
+      ansible.builtin.command: fail2ban-client status
+      register: f2b_status
+      changed_when: false
+      failed_when: f2b_status.rc != 0
 
-      -   name: Show HTTP/HTTPS probe results
-          debug:
-            msg:
-              - "HTTP {{ http_probe.status | default('FAIL') }}"
-              - "HTTPS {{ https_probe.status | default('not configured / FAIL') }}"
+    - name: Show fail2ban status
+      ansible.builtin.debug:
+        var: f2b_status.stdout_lines
+
+    - name: Assert fail2ban sshd jail is up
+      ansible.builtin.command: fail2ban-client status sshd
+      register: f2b_sshd
+      changed_when: false
+      failed_when: f2b_sshd.rc != 0
+
+- name: Stage 6 - HTTP/HTTPS smoke
+  hosts: site
+  gather_facts: false
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
+  tasks:
+    - name: HTTP probe (80)
+      ansible.builtin.uri:
+        url: "http://{{ domain_name }}/"
+        status_code: [200, 301, 302, 308, 404]
+        validate_certs: false
+        timeout: 10
+      register: http_probe
+      failed_when: false
+
+    - name: HTTPS probe (443)
+      ansible.builtin.uri:
+        url: "https://{{ domain_name }}/"
+        status_code: [200, 301, 302, 308, 404]
+        validate_certs: false
+        timeout: 10
+      register: https_probe
+      failed_when: false
+
+    - name: Show HTTP/HTTPS probe results
+      ansible.builtin.debug:
+        msg:
+          - "HTTP {{ http_probe.status | default('FAIL') }}"
+          - "HTTPS {{ https_probe.status | default('not configured / FAIL') }}"
