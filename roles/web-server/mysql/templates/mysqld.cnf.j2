@@ -10,6 +10,11 @@
 # Базовые настройки безопасности
 #
 bind-address = 127.0.0.1 # Прослушивание только localhost
+# X Protocol (порт 33060) — по дефолту слушает *:33060. Сейчас закрыт UFW,
+# но defence-in-depth: биндим на localhost, чтобы flush firewall не делал
+# его внезапно наружным. Плагин нужен только для MySQL Shell / Document Store /
+# async X DevAPI — в Yii2/PDO он не используется.
+mysqlx_bind_address = 127.0.0.1
 local-infile = 0 # Отключает функцию LOAD DATA LOCAL INFILE, которая позволяет загружать файлы с клиентской машины в базу данных. Это устраняет потенциальный вектор атаки, связанный с чтением файлов злоумышленником.
 sql_mode = STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
 # default_authentication_plugin УДАЛЁН в MySQL 8.4 (с ним сервер не стартует).
