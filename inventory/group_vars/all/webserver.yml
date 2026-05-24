@@ -52,15 +52,6 @@ mysql_db_user: mysql_db_user
 mysql_db_user_password: "{{ vault_mysql_db_user_password }}"
 mysql_root_password: "{{ vault_mysql_root_password }}"
 
-# Список host-значений в mysql.user, которые root@<host> НЕ удаляются при secure_installation.
-# Всё остальное (включая '%' и FQDN сервера) удаляется.
-# DEPRECATED: используется только legacy-блоком в mysql/tasks/mysql_secure_installation.yml
-# (MySQL 8.4 на чистой установке создаёт только root@localhost). Удалить вместе с тем блоком
-# после проверки на проде.
-keep_mysql_root_hosts:
-  - localhost
-  - 127.0.0.1
-
 ##########################################################
 # CERTBOT
 ##########################################################
