@@ -1,0 +1,19 @@
+<State>
+    <highlightingPatterns>
+        <LogHighlightingPattern pattern="^\s*(ok|included|rescued)\s*$" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" fg="{&quot;lightRgb&quot;:-13730510,&quot;darkRgb&quot;:-8271996}" uuid="a1b00001-cf12-4b1d-8e0a-d3c4b5a60001" />
+        <LogHighlightingPattern pattern="^\s*(skipping|skipped|ignored)\s*$" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" fg="{&quot;lightRgb&quot;:-9079435,&quot;darkRgb&quot;:-6381922}" uuid="a1b00002-cf12-4b1d-8e0a-d3c4b5a60002" />
+        <LogHighlightingPattern pattern="^\s*(TASK|ansible-playbook|ansible-inventory)\s*$" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" fg="{&quot;lightRgb&quot;:-15374912,&quot;darkRgb&quot;:-7288071}" uuid="a1b00003-cf12-4b1d-8e0a-d3c4b5a60003" />
+        <LogHighlightingPattern pattern="^\s*PLAY\s*$" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" fg="{&quot;lightRgb&quot;:-15064194,&quot;darkRgb&quot;:-6313766}" uuid="a1b00004-cf12-4b1d-8e0a-d3c4b5a60004" />
+        <LogHighlightingPattern pattern="^\s*PLAY RECAP\s*$" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" fg="{&quot;lightRgb&quot;:-16750244,&quot;darkRgb&quot;:-8336444}" uuid="a1b00005-cf12-4b1d-8e0a-d3c4b5a60005" />
+        <LogHighlightingPattern pattern="ok=\d+\s+changed=\d+" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" fg="{&quot;lightRgb&quot;:-16757440,&quot;darkRgb&quot;:-11684180}" uuid="a1b00006-cf12-4b1d-8e0a-d3c4b5a60006" />
+        <LogHighlightingPattern pattern="^\s*changed\s*$" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" fg="{&quot;lightRgb&quot;:-1683200,&quot;darkRgb&quot;:-18611}" uuid="a1b00007-cf12-4b1d-8e0a-d3c4b5a60007" />
+        <LogHighlightingPattern pattern="^\s*(fatal|ERROR!|unreachable|failed)\s*$" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" fg="{&quot;lightRgb&quot;:-3790808,&quot;darkRgb&quot;:-44462}" uuid="a1b00008-cf12-4b1d-8e0a-d3c4b5a60008" />
+        <LogHighlightingPattern pattern="failed=[1-9]|unreachable=[1-9]" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" fg="{&quot;lightRgb&quot;:-3790808,&quot;darkRgb&quot;:-44462}" uuid="a1b00009-cf12-4b1d-8e0a-d3c4b5a60009" />
+        <LogHighlightingPattern pattern="^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" action="HIGHLIGHT_MATCH" fg="{&quot;lightRgb&quot;:-8875876,&quot;darkRgb&quot;:-11243910}" uuid="a1b0000a-cf12-4b1d-8e0a-d3c4b5a6000a" />
+    </highlightingPatterns>
+  <hiddenSubstrings />
+  <parsingPatterns>
+    <LogParsingPattern enabled="true" name="Ansible" pattern="^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) (p=\d+ u=\w+ n=\w+) \| (?:(ok|changed|skipping|fatal|ERROR!|unreachable|included|rescued|ignored|failed):?)?(?:\s*(TASK|PLAY|PLAY RECAP|ansible-playbook|ansible-inventory) )?\s*(.*)$" timePattern="YYYY-MM-DD HH:MM:SS,SSS " linePattern="^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}" uuid="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" />
+  </parsingPatterns>
+  <settingsVersion>13</settingsVersion>
+</State>

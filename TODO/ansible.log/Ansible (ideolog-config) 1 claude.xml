@@ -1,0 +1,31 @@
+<State>
+  <highlightingPatterns>
+    <!-- OK / included / rescued — green -->
+    <LogHighlightingPattern enabled="true" pattern="\| (?:ok|included|rescued): " formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" action="HIGHLIGHT_LINE" fg="{&quot;lightRgb&quot;:-13730510,&quot;darkRgb&quot;:-8271996}" bold="false" italic="false" stripe="false" uuid="a1b00001-cf12-4b1d-8e0a-d3c4b5a60001" />
+    <!-- Skipping / ignored — gray, italic -->
+    <LogHighlightingPattern enabled="true" pattern="\| (?:skipping|ignored): " formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" action="HIGHLIGHT_LINE" fg="{&quot;lightRgb&quot;:-9079435,&quot;darkRgb&quot;:-6381922}" bold="false" italic="true" stripe="false" uuid="a1b00002-cf12-4b1d-8e0a-d3c4b5a60002" />
+    <!-- Changed — orange -->
+    <LogHighlightingPattern enabled="true" pattern="\| changed: " formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" action="HIGHLIGHT_LINE" fg="{&quot;lightRgb&quot;:-1683200,&quot;darkRgb&quot;:-18611}" bold="false" italic="false" stripe="false" uuid="a1b00003-cf12-4b1d-8e0a-d3c4b5a60003" />
+    <!-- TASK header — blue -->
+    <LogHighlightingPattern enabled="true" pattern="\| TASK \[" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" action="HIGHLIGHT_LINE" fg="{&quot;lightRgb&quot;:-15374912,&quot;darkRgb&quot;:-7288071}" bold="false" italic="false" stripe="false" uuid="a1b00004-cf12-4b1d-8e0a-d3c4b5a60004" />
+    <!-- PLAY header — indigo, bold -->
+    <LogHighlightingPattern enabled="true" pattern="\| PLAY \[" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" action="HIGHLIGHT_LINE" fg="{&quot;lightRgb&quot;:-15064194,&quot;darkRgb&quot;:-6313766}" bold="true" italic="false" stripe="false" uuid="a1b00005-cf12-4b1d-8e0a-d3c4b5a60005" />
+    <!-- PLAY RECAP header — teal, bold -->
+    <LogHighlightingPattern enabled="true" pattern="\| PLAY RECAP " formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" action="HIGHLIGHT_LINE" fg="{&quot;lightRgb&quot;:-16750244,&quot;darkRgb&quot;:-8336444}" bold="true" italic="false" stripe="false" uuid="a1b00006-cf12-4b1d-8e0a-d3c4b5a60006" />
+    <!-- RECAP summary (host stats) — dark teal -->
+    <LogHighlightingPattern enabled="true" pattern="\| \S+\s+: ok=\d+" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" action="HIGHLIGHT_LINE" fg="{&quot;lightRgb&quot;:-16757440,&quot;darkRgb&quot;:-11684180}" bold="false" italic="false" stripe="false" uuid="a1b00007-cf12-4b1d-8e0a-d3c4b5a60007" />
+    <!-- Error: fatal / unreachable / ERROR! — red, bold, stripe -->
+    <LogHighlightingPattern enabled="true" pattern="\| (?:fatal|unreachable): |\| ERROR!" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" action="HIGHLIGHT_LINE" fg="{&quot;lightRgb&quot;:-3790808,&quot;darkRgb&quot;:-44462}" bold="true" italic="false" stripe="true" uuid="a1b00008-cf12-4b1d-8e0a-d3c4b5a60008" />
+    <!-- RECAP with failures (failed or unreachable > 0) — red, bold, stripe (overrides normal recap) -->
+    <LogHighlightingPattern enabled="true" pattern="(?:failed|unreachable)=[1-9]" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" action="HIGHLIGHT_LINE" fg="{&quot;lightRgb&quot;:-3790808,&quot;darkRgb&quot;:-44462}" bold="true" italic="false" stripe="true" uuid="a1b00009-cf12-4b1d-8e0a-d3c4b5a60009" />
+    <!-- Timestamp — dim blue-gray -->
+    <LogHighlightingPattern enabled="true" pattern="^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" action="HIGHLIGHT_MATCH" fg="{&quot;lightRgb&quot;:-8875876,&quot;darkRgb&quot;:-11243910}" bold="false" italic="false" stripe="false" uuid="a1b0000a-cf12-4b1d-8e0a-d3c4b5a6000a" />
+    <!-- Process info (p=... u=... n=...) — dim -->
+    <LogHighlightingPattern enabled="true" pattern="p=\d+ u=\w+ n=\w+" formatId="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" captureGroup="-1" action="HIGHLIGHT_MATCH" fg="{&quot;lightRgb&quot;:-7297874,&quot;darkRgb&quot;:-8875876}" bold="false" italic="false" stripe="false" uuid="a1b0000b-cf12-4b1d-8e0a-d3c4b5a6000b" />
+  </highlightingPatterns>
+  <hiddenSubstrings />
+  <parsingPatterns>
+    <LogParsingPattern enabled="true" name="Ansible" pattern="^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) (p=\d+ u=\w+ n=\w+) \| (?:(ok|changed|skipping|fatal|ERROR!|unreachable|included|rescued|ignored|failed):?\s)?(.*)$" timePattern="yyyy-MM-dd HH:mm:ss,SSS" linePattern="^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}" timeId="0" severityId="2" categoryId="1" fullmatch="false" uuid="f7a3e1b2-4c5d-4e6f-8a9b-0c1d2e3f4a5b" />
+  </parsingPatterns>
+  <settingsVersion>13</settingsVersion>
+</State>

@@ -1,0 +1,13 @@
+<State>
+    <highlightingPatterns>
+        <LogHighlightingPattern pattern="^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})" formatId="30cf253d-0be5-6608-9ccb-57cdc604fb5c" captureGroup="-1" fg="{&quot;lightRgb&quot;:-10971724,&quot;darkRgb&quot;:-15824503}" uuid="28b02c93-710c-45a0-ad63-40e8c9943139" />
+        <LogHighlightingPattern pattern="^\s*(ok|fatal|ERROR!|changed|skipped|unreachable)?\s*$" formatId="30cf253d-0be5-6608-9ccb-57cdc604fb5c" captureGroup="-1" fg="{&quot;lightRgb&quot;:-57060,&quot;darkRgb&quot;:-57060}" uuid="34409a5a-12db-4354-baa7-b87006c28436" />
+        <LogHighlightingPattern pattern="^\s*(TASK|PLAY|PLAY RECAP|ansible-playbook|ansible-inventory)?\s*$" formatId="30cf253d-0be5-6608-9ccb-57cdc604fb5c" captureGroup="-1" fg="{&quot;lightRgb&quot;:-57063,&quot;darkRgb&quot;:-9853749}" uuid="44409a5a-12db-4354-baa7-b87006c28437" />
+        <LogHighlightingPattern pattern="^\s*(p=\d+ u=\w+ n=ansible)?\s*$" formatId="30cf253d-0be5-6608-9ccb-57cdc604fb5c" captureGroup="-1" fg="{&quot;lightRgb&quot;:-55063,&quot;darkRgb&quot;:-8320135}" uuid="54409a5a-12db-4054-baa7-b87006c28430" />
+    </highlightingPatterns>
+  <hiddenSubstrings />
+  <parsingPatterns>
+    <LogParsingPattern enabled="true" name="Ansible" pattern="^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) (p=\d+ u=\w+ n=ansible) \| (?:(ok|fatal|ERROR!|changed|skipped|unreachable):?)?(?:\s*(TASK|PLAY|PLAY RECAP|ansible-playbook|ansible-inventory) )?\s*(.*)$" timePattern="YYYY-MM-DD HH:MM:SS,SSS " linePattern="^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}" uuid="30cf253d-0be5-6608-9ccb-57cdc604fb5c" />
+  </parsingPatterns>
+  <settingsVersion>13</settingsVersion>
+</State>
