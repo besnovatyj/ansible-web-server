@@ -4,10 +4,13 @@ all: # Корневая группа, включает все хосты. Не �
     site: # Название группы хостов
       hosts: # Список хостов в группе или подгруппе
         server: # Конкретный хост с параметрами подключения.
+          # Профиль подключения по умолчанию = automation-пользователь по ключу
+          # БЕЗ passphrase. Единственное, что нужно задать руками здесь, —
+          # ansible_host (IP). Парольный доступ root НЕ светим в инвентаре:
+          # он живёт только внутри stage-1b-bootstrap-keys.yml (play-level vars).
           ansible_connection: ssh
           ansible_host: 000.000.000.000
-          ansible_port: 22
-          ansible_ssh_private_key_file: "{{ ordinary_key_path | default(omit) }}"
-          ansible_user: "{{ site_ansible_user }}"
-          ansible_password: "{{ vault_ansible_password | default(omit) }}"
+          ansible_port: "{{ target_ssh_port }}"
+          ansible_user: "{{ ssh_automation_user }}"
+          ansible_ssh_private_key_file: "{{ automation_key_path }}"
 
