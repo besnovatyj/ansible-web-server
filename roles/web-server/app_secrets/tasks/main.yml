@@ -6,6 +6,11 @@
 # clear_env=no в пуле; (2) не утекает через /proc/<pid>/environ, phpinfo(),
 # var_dump($_ENV). Значения — те же, что задают роли mysql/redis (единый источник).
 
+# Быстрая проверка на сервере после прогона:
+#  ls -l /run/secrets/                                # симлинк → /etc/bescms/secrets, внутри 4 файла
+#  sudo -u www-data cat /run/secrets/MYSQL_PASSWORD   # www-data читает
+#  systemctl reboot && ls -l /run/secrets             # симлинк жив после ребута
+
 # Защита от тихого битого конфига: пустой секрет → SecretReader вернёт '' и
 # приложение молча получит пустой пароль/имя БД. Лучше упасть здесь.
 - name: Assert app secret values are present

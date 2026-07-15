@@ -91,6 +91,37 @@
         timeout: 5
         state: started
 
+    # app_secrets: файловые секреты для SecretReader реально на месте и читаемы
+    # www-data (под ним php-fpm и queue-воркеры). Пути/имена захардкожены, как и
+    # прочие списки в post-checks; источник правды — роль web-server/app_secrets.
+    - name: Stat /run/secrets link (без follow — смотрим сам symlink)
+      ansible.builtin.stat:
+        path: /run/secrets
+        follow: false
+      register: secrets_link
+
+    - name: Assert /run/secrets is a symlink to the persistent dir
+      assert:
+        that:
+          - secrets_link.stat.exists
+          - secrets_link.stat.islnk | default(false)
+          - secrets_link.stat.lnk_target == '/etc/bescms/secrets'
+        fail_msg: >-
+          /run/secrets не symlink на /etc/bescms/secrets (systemd-tmpfiles не
+          отработал). SecretReader не найдёт секреты → пустой конфиг БД/Redis.
+
+    - name: Assert each secret file is readable by www-data (php-fpm/queue)
+      ansible.builtin.command: test -r /run/secrets/{{ item }}
+      become_user: www-data
+      changed_when: false
+      loop:
+        - MYSQL_DATABASE
+        - MYSQL_USER
+        - MYSQL_PASSWORD
+        - REDIS_PASSWORD
+      loop_control:
+        label: "{{ item }}"
+
     # service_restart: политика авто-рестарта реально применена к юнитам.
     - name: Get Restart= policy per critical unit
       command: systemctl show -p Restart --value {{ item }}
