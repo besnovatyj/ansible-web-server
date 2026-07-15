@@ -8,6 +8,17 @@
 ##########################################################
 
 domain_name: domain.zone
+
+# Хосты трёх доменов приложения — единый источник правды. Отсюда их берут:
+#   • nginx  — server_name в nginx_sites (webserver.yml);
+#   • app_secrets → файлы /run/secrets/{MAIN,ADM,FILES}_HOST, которые читает
+#     Besnovatyj\Helpers\SecretReader::get() в конфигах приложения (params-local).
+# Меняешь поддомен ЗДЕСЬ — синхронно меняется и nginx-vhost, и секреты приложения.
+app_hosts:
+  main: "{{ domain_name }}"
+  adm: "adm.{{ domain_name }}"
+  files: "files.{{ domain_name }}"
+
 # Единый источник правды для IP/адреса целевого сервера.
 host_ip: "{{ hostvars[groups['site'][0]]['ansible_host'] }}" # А это где-то нужно? — Да: stage-1 (assert), stage-5a-certbot (проверка DNS), и источник для target_host (ssh.yml)
 web_root: "/var/www"

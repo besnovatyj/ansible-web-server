@@ -48,6 +48,34 @@
     label: "{{ item.key }}"
   no_log: true
 
+# --- Хосты приложения (MAIN_HOST/ADM_HOST/FILES_HOST) ---
+# Тот же контракт «пустой → упасть здесь», что и у секретов: пустой хост →
+# SecretReader вернёт '' → приложение получит битые абсолютные URL и cookieDomain.
+- name: Assert app runtime hosts are present
+  ansible.builtin.assert:
+    that:
+      - item.value | string | length > 0
+    fail_msg: >-
+      Пустой хост '{{ item.key }}'. SecretReader вернёт '' → битые абсолютные
+      URL/cookieDomain. Проверь app_hosts в group_vars/all/main.yml.
+  loop: "{{ app_runtime_hosts | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+# Хосты публичны — no_log НЕ ставим (в отличие от секретов выше): значения видно
+# в логе, это упрощает диагностику и ничего не раскрывает. Пишем в тот же каталог
+# и с теми же правами (root:www-data 0640), чтобы SecretReader нашёл их так же.
+- name: Разложить хосты приложения в отдельные файлы (для SecretReader)
+  ansible.builtin.copy:
+    dest: "{{ app_secrets_dir }}/{{ item.key }}"
+    content: "{{ item.value }}"
+    owner: root
+    group: www-data
+    mode: "0640"
+  loop: "{{ app_runtime_hosts | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
 # /run — tmpfs, symlink чистится на ребуте → держим его декларативно через
 # systemd-tmpfiles (пересоздаётся на каждой загрузке). L+ = принудительно
 # заменить существующий путь (идемпотентно между ребутами).

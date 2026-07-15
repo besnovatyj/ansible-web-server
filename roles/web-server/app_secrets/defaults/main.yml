@@ -28,3 +28,14 @@ app_secrets:
   MYSQL_PASSWORD: "{{ mysql_db_user_password }}"
   REDIS_PASSWORD: "{{ redis_password }}"
   ALTCHA_HMAC_KEY: "{{ altcha_hmac_key }}"
+
+# Отдельный маппинг ХОСТОВ (технически НЕ секреты — публичны). Их читает тот же
+# SecretReader::get() из /run/secrets, поэтому раскладываются рядом с секретами,
+# но ОТДЕЛЬНЫМ таском БЕЗ no_log (в логе их видно — помогает диагностике и ничего
+# не раскрывает). ИМЯ ФАЙЛА = аргумент SecretReader::get() в params-local.php
+# (регистрозависимо). Значения — из app_hosts (единый источник правды,
+# group_vars/all/main.yml), тот же источник, что и server_name у nginx.
+app_runtime_hosts:
+  MAIN_HOST: "{{ app_hosts.main }}"
+  ADM_HOST: "{{ app_hosts.adm }}"
+  FILES_HOST: "{{ app_hosts.files }}"

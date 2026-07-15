@@ -121,6 +121,10 @@
         - MYSQL_PASSWORD
         - REDIS_PASSWORD
         - ALTCHA_HMAC_KEY
+        # Хосты приложения (публичны, но раскладываются тем же механизмом):
+        - MAIN_HOST
+        - ADM_HOST
+        - FILES_HOST
       loop_control:
         label: "{{ item }}"
 
