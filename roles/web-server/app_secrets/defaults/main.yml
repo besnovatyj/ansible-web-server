@@ -1,0 +1,29 @@
+---
+##########################################################
+# `snake_case` для Ansible-переменных не просто конвенция, а практическое требование Jinja2 — `php-version` он трактует
+# как `php` минус `version`.
+##########################################################
+
+##########################################################
+# APP SECRETS (для \Besnovatyj\Helpers\SecretReader, приоритет №1 — файлы)
+##########################################################
+
+# Персистентная директория секретов приложения (переживает ребут, лежит в ext4,
+# НЕ в tmpfs). Читаема группой www-data (под ней бегут php-fpm и queue-воркеры).
+app_secrets_dir: /etc/bescms/secrets
+
+# Путь, откуда SecretReader::get() читает файлы (SECRETS_PATH в хелпере). /run —
+# tmpfs и чистится на каждой загрузке, поэтому это symlink на app_secrets_dir,
+# который systemd-tmpfiles пересоздаёт при каждом boot.
+app_secrets_runtime_link: /run/secrets
+
+# Маппинг: ИМЯ ФАЙЛА (ровно как аргумент SecretReader::get() в
+# app/common/config/main-local.php) → значение из уже существующих переменных
+# проекта. ВНИМАНИЕ: имена регистрозависимы (Linux fs) — сейчас все в ВЕРХНЕМ
+# регистре, ровно как get() в конфиге; менять регистр нельзя, иначе хелпер файл
+# не найдёт.
+app_secrets:
+  MYSQL_DATABASE: "{{ mysql_db_name }}"
+  MYSQL_USER: "{{ mysql_db_user }}"
+  MYSQL_PASSWORD: "{{ mysql_db_user_password }}"
+  REDIS_PASSWORD: "{{ redis_password }}"

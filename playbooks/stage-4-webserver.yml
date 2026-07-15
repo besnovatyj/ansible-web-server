@@ -37,6 +37,9 @@
     - ../roles/web-server/mysql
     - ../roles/web-server/nginx
     - ../roles/web-server/php
+    # Секреты приложения в /run/secrets (файловый путь SecretReader, приоритет №1).
+    # ПОСЛЕ php: www-data уже существует; значения — те же, что задали redis/mysql.
+    - ../roles/web-server/app_secrets
     # Авто-рестарт критичных сервисов (fire-and-forget): ставится ПОСЛЕ того,
     # как все сервисы установлены — drop-in'ы Restart=on-failure.
     - ../roles/system/service_restart
