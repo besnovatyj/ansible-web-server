@@ -39,6 +39,7 @@
               --cert-name {{ domain_name }}
               --keep-until-expiring
               {{ '--staging' if certbot_staging | bool else '' }}
+              {{ '--force-renewal' if certbot_force_renewal | bool else '' }}
               {{ certbot_domains_args }}
     register: certbot_run
     # Успех любого реального действия (выпуск / обновление / расширение) certbot

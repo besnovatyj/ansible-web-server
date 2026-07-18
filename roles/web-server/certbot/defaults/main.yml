@@ -8,3 +8,10 @@
 # ошибка. Для боевого выпуска оставить false (или переопределить в inventory
 # на время теста: `-e certbot_staging=true`).
 certbot_staging: false
+
+# certbot_force_renewal — принудительный перевыпуск, игнорируя
+# --keep-until-expiring. Единственный штатный сценарий: первый БОЕВОЙ запуск
+# после staging-теста — staging-сертификат ещё не истёк, и без force certbot
+# просто оставит его (reinstall, браузер продолжит ругаться на недоверенный CA).
+# Расходует прод-квоту → включать разово: `-e certbot_force_renewal=true`.
+certbot_force_renewal: false

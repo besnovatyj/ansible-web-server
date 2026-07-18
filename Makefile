@@ -42,6 +42,12 @@ stage-4: agent-up ## LEMP: Redis, Memcached, MySQL, Nginx, PHP
 stage-5a: agent-up ## Certbot (только после Stage 4 + настройки DNS)
 	$(PLAY) playbooks/stage-5a-certbot.yml
 
+stage-5a-staging: agent-up ## Certbot против STAGING CA (отладка DNS/пайплайна, сертификат недоверенный)
+	$(PLAY) playbooks/stage-5a-certbot.yml -e certbot_staging=true
+
+stage-5a-force: agent-up ## Certbot: принудительный перевыпуск (боевой запуск ПОСЛЕ staging-теста)
+	$(PLAY) playbooks/stage-5a-certbot.yml -e certbot_force_renewal=true
+
 stage-5b: agent-up ## Queue workers (только после деплоя исходников)
 	$(PLAY) playbooks/stage-5b-queue.yml
 

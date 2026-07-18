@@ -251,3 +251,61 @@ ansible-playbook -i inventory/hosts.yml playbooks/stage-X.yml --check
 ```bash
 make inventory-graph
 ```
+
+---
+
+## Анализ: не повторится ли «Apple не открывает сайт» (Let's Encrypt / TLS) после настройки ansible
+
+Контекст: месяц назад устройства Apple (iPhone 15/16, iOS 17/18/19, macOS/Safari) перестали
+открывать сайты на серверах, настроенных годами ранее. Разбор причин — в `/workspace/TODO/!!!Certbot.md`.
+Проблему на старых серверах устранили. Вопрос: воспроизведёт ли её свежая настройка через `/workspace/ansible`.
+
+### Как сейчас устроен TLS в ansible
+
+- `roles/web-server/nginx/templates/site.tmp.j2` описывает **только `listen 80`**. 443-блок дописывает
+  **`certbot --nginx`** (`roles/web-server/certbot`): вставляет `listen 443 ssl; # managed by Certbot`
+  и `include /etc/letsencrypt/options-ssl-nginx.conf`.
+- Глобально в `nginx.conf.j2` есть `ssl_protocols TLSv1.2 TLSv1.3;`, но per-vhost его перекрывает
+  включаемый certbot файл (это признано и в комментарии на строке 58).
+
+### Причина 1 (старые шифры / TLS 1.0–1.1) — НЕ повторится на свежей установке
+
+Файл, сломавший старые серверы (`options-ssl-nginx.conf`, годами лежавший с TLS 1.0/1.1 и шифрами без
+Forward Secrecy), на свежем сервере пишется **текущим** пакетом `python3-certbot-nginx` (Ubuntu 24.04,
+certbot 2.x): там уже `ssl_protocols TLSv1.2 TLSv1.3;`, `ssl_prefer_server_ciphers off;`, а `ssl_ciphers`
+не пиннится (дефолты OpenSSL: для TLS1.2 остаются ECDHE-GCM с FS, TLS1.3 всегда AEAD). Safari/iOS
+согласуют ECDHE-…-GCM → хендшейк проходит. Ровно та ловушка не воспроизводится.
+
+⚠️ Структурный нюанс тот же, что укусил: файл принадлежит **пакету certbot, а не ansible** — вне version
+control и может тихо «постареть» через годы (сценарий fire-and-forget-серверов). Современные версии
+устойчивее старых, но дыра во владении остаётся.
+
+### Причина 2 (нет HTTP/2) — повторится
+
+`certbot --nginx` добавляет `listen 443 ssl;` **без http2** → HTTPS по HTTP/1.1, как на старых серверах
+до правки. Честно: отсутствие http2 почти наверняка НЕ было настоящей причиной блокировки Apple —
+хард-блок хендшейка даёт Причина 1 (+ смена корневых цепочек Let's Encrypt). Safari работает по
+HTTP/1.1; http2 — про скорость и edge-случаи, а не «сайт не открывается». Реальный блокер уже закрыт
+свежестью certbot; http2 стоит добавить ради корректности и скорости.
+
+### Причина 3 (смена цепочки Let's Encrypt Gen X→Y) — закрыта автоматически
+
+certbot отдаёт `fullchain.pem` и на renewal тянет актуальную цепочку; современные Apple-устройства
+доверяют ISRG Root X1/X2. Действий не требуется.
+
+### Рекомендация
+
+Свежий деплой Apple не сломает. Но чтобы (а) гарантировать http2 и (б) закрыть структурную дыру
+«критичный TLS-файл не у меня», правильный ход — перестать отдавать 443-блок на откуп плагину и владеть
+им самому:
+
+1. 443-server-блоки — в ansible-шаблоне, с явными `listen 443 ssl http2;` (на nginx 1.24 из Ubuntu 24.04
+   http2 идёт в строке `listen`; standalone `http2 on;` — только с nginx 1.25.1+), современным
+   `ssl_protocols`/`ssl_ciphers` (Mozilla Intermediate, `ssl_prefer_server_ciphers off`), OCSP stapling
+   и путями к `fullchain.pem`.
+2. certbot перевести в `certonly --webroot` (только выпуск/продление, конфиг nginx не трогает) +
+   `.well-known/acme-challenge` в 80-блоке + reload-hook на renew.
+
+Тогда весь TLS под git, http2 гарантирован, шифры не «стареют» за спиной. Минимальная альтернатива
+(оставить `--nginx` и дописывать http2 через `lineinfile` поверх certbot-строки) — хрупкая и не
+закрывает проблему владения шифрами; не рекомендуется.
