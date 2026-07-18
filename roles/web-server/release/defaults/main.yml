@@ -1,0 +1,74 @@
+---
+# Роль релиза приложения: git clone/pull публичного репозитория + composer
+# install + php init (Production). Запускается отдельно (stage-5d-release.yml,
+# `make release`), в full-deploy НЕ входит. Требует выполненного stage-4
+# (php-fpm, composer, nginx, app_secrets). Резервная альтернатива — stage-5c
+# (rsync локального дерева).
+
+# Публичный репозиторий приложения: клон по HTTPS, аутентификация не нужна.
+release_repo_url: "https://github.com/besnovatyj/yii2-cms.git"
+
+# Что выкладываем: ветка/тег/коммит. Тег воспроизводимее ветки; для первых
+# выкладок — main.
+release_repo_version: "master"
+
+# Куда клонируем репозиторий: прямо в папку домена. Корень репо = корень
+# приложения (backend/, frontend/, composer.json), nginx-корни (webserver.yml)
+# указывают на {{ web_root }}/{{ domain_name }}/{frontend,backend}/pub и
+# .../static, queue-воркеры — на {{ web_root }}/{{ domain_name }}/yii.
+release_root: "{{ web_root }}/{{ domain_name }}"
+
+# Подкаталог приложения внутри репозитория (composer.json, init, yii).
+# Пусто = приложение в корне репо.
+release_app_subdir: ""
+release_app_dir: "{{ release_root }}{{ ('/' ~ release_app_subdir) if release_app_subdir | length > 0 else '' }}"
+
+# Владелец кода — деплой-пользователь, НЕ www-data: PHP-процесс не должен уметь
+# переписывать собственный код (усилитель любой RCE/upload-уязвимости).
+# www-data получает запись только в release_writable_dirs.
+release_owner: "{{ ssh_automation_user }}"
+
+# Пользователь PHP-FPM и queue-воркеров.
+release_web_user: www-data
+
+# Имя окружения из app/environments/index.php.
+release_env_name: Production
+
+# Каталоги (относительно release_app_dir), куда пишет приложение.
+# Модель прав: владелец release_owner, группа www-data, mode 2775 (setgid):
+#   - git checkout под release_owner всегда может писать (владелец);
+#   - www-data пишет через группу, setgid наследует группу на создаваемое.
+# ВАЖНО: не хранить в этих каталогах трекаемых git-ом файлов тяжелее .gitkeep —
+# их содержимое живёт на сервере (загрузки/кэши), а не в репозитории.
+release_writable_dirs:
+  - backend/pub/assets
+  - frontend/pub/assets
+  - static
+  # origin/ и cache/ трекаются в репозитории маркером .gitignore (внутри —
+  # '*' + '!.gitignore'), поэтому git clone под release_owner материализует их
+  # с ownership deploy-юзера, а не www-data. Это корни, куда пишет приложение
+  # (модули создают origin/{Module}, cache/{Module}), — объявляем их явно,
+  # иначе setgid на static/ не помогает: он наследуется лишь на то, что создаёт
+  # сам www-data, а не на git-материализованные подкаталоги.
+  - static/origin
+  - static/cache
+  - var/config
+  - var/runtime
+release_writable_mode: "2775"
+
+# --- Первичный посев var/config ---
+# Круг первого релиза (yii бутстрапится через merge-plan.php, а генерит его
+# recompile, который сам поднимает yii) разрывается НЕ здесь, а самим
+# приложением: `init` разворачивает bootstrap merge-plan из скелета окружения
+# (app/environments/{dev,prod}/var/config/merge-plan.php — только root-слой,
+# без вкладов модулей), а первый post-install recompile перезаписывает его
+# полным планом. Роль в app/var/config не лезет — кросс-проектной зависимости
+# от dev-машины больше нет.
+
+# --- Импорт дампа БД (opt-in) ---
+# РАЗРУШИТЕЛЬНО: перезаписывает данные существующей БД, поэтому по умолчанию
+# ВЫКЛ и в обычный `make release` не входит. Для первичной выкладки:
+# `make release-db` (передаёт -e release_import_db=true).
+release_import_db: false
+# Путь к локальному дампу (по умолчанию каталог проекта /mysql_dump/dump.sql).
+release_db_dump_src: "{{ inventory_dir }}/../mysql_dump/dump.sql"

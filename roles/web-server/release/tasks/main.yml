@@ -1,0 +1,172 @@
+---
+# Git нужен модулю ansible.builtin.git на целевом хосте (stage-1 его не ставит).
+- name: Ensure Git is present
+  ansible.builtin.apt:
+    name: "git"
+    state: present
+    update_cache: yes
+  register: apt_result
+  until: apt_result is success
+  retries: 5       # Попробовать 5 раз
+  delay: 10        # Ждать 10 секунд между попытками
+
+# Корень релиза принадлежит деплой-пользователю: git и composer работают под
+# ним без записи от root внутрь дерева.
+- name: Ensure release root exists and is owned by deploy user
+  ansible.builtin.file:
+    path: "{{ release_root }}"
+    state: directory
+    owner: "{{ release_owner }}"
+    group: "{{ release_owner }}"
+    mode: "0755"
+
+# Защита от конфликта с прежней не-git выкладкой (например, rsync stage-5c):
+# git не клонирует в непустой каталог без .git. Наличие ФАЙЛОВ (не пустых
+# каталогов) — реальное содержимое, его не удаляем — останавливаемся и сообщаем.
+- name: Scan release root content
+  ansible.builtin.find:
+    paths: "{{ release_root }}"
+    file_type: any
+    hidden: true
+    recurse: true
+  register: release_root_scan
+
+- name: Stat .git in release root
+  ansible.builtin.stat:
+    path: "{{ release_root }}/.git"
+  register: release_git_dir
+
+- name: Assert release root is a git clone or contains no files
+  ansible.builtin.assert:
+    that:
+      - release_git_dir.stat.exists
+        or (release_root_scan.files | rejectattr('isdir') | list | length) == 0
+    fail_msg: >-
+      {{ release_root }} содержит файлы и не является git-клоном (вероятно,
+      прежняя rsync-выкладка stage-5c или ручная). Перенесите или удалите
+      его содержимое вручную и повторите `make release`.
+
+# Пустой скелет web-корней, созданный ролью nginx до первого релиза
+# ({frontend,backend}/pub, static), мешает git clone. Файлов в нём
+# нет (assert выше это гарантирует), certbot работает через --nginx-плагин
+# и в web-корнях ничего не хранит — удаление безопасно. После первого клона
+# .git существует и задача не выполняется.
+- name: Remove empty directory skeleton before initial clone
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ release_root_scan.files | selectattr('isdir') | list }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when: not release_git_dir.stat.exists
+
+- name: Clone or update application repository
+  become_user: "{{ release_owner }}"
+  ansible.builtin.git:
+    repo: "{{ release_repo_url }}"
+    dest: "{{ release_root }}"
+    version: "{{ release_repo_version }}"
+    # Локальные правки трекаемых файлов на сервере отбрасываются:
+    # источник правды — репозиторий. Untracked (var/*, pub/index.php,
+    # *-local.php, загрузки) force не трогает.
+    force: true
+  notify: Reload php-fpm
+
+# --- Импорт дампа БД (opt-in, разрушительно — см. defaults) ---
+# ДО composer install: его post-install-cmd (`php yii Modman/modules/recompile`)
+# поднимает консольное приложение, которому может понадобиться реестр модулей
+# в БД — на первичной выкладке база до импорта пуста.
+- name: Database import block
+  when: release_import_db | bool
+  block:
+    - name: Stat local DB dump
+      ansible.builtin.stat:
+        path: "{{ release_db_dump_src }}"
+      delegate_to: localhost
+      # delegate_to наследует become плея — sudo выполнялся бы на ЛОКАЛЬНОЙ
+      # машине (см. project_ansible_delegate_become / роль verify_ssh).
+      become: false
+      register: db_dump_stat
+
+    - name: Assert DB dump exists and is non-empty
+      ansible.builtin.assert:
+        that:
+          - db_dump_stat.stat.exists
+          - db_dump_stat.stat.size > 0
+        fail_msg: >-
+          Дамп {{ release_db_dump_src }} отсутствует или пуст — импорт БД
+          прошёл бы молча. Проверь путь/содержимое.
+
+    - name: Copy DB dump to server
+      ansible.builtin.copy:
+        src: "{{ release_db_dump_src }}"
+        dest: "{{ web_root }}/dump.sql"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Import DB dump
+      mysql_db:
+        name: "{{ mysql_db_name }}"
+        state: import
+        target: "{{ web_root }}/dump.sql"
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      no_log: true
+
+    - name: Remove remote dump.sql
+      ansible.builtin.file:
+        path: "{{ web_root }}/dump.sql"
+        state: absent
+
+# Инициализация окружения Yii2: yii-скрипт, index.php в pub/, *-local.php
+# конфиги, cookieValidationKey. ДО composer install: его post-install-cmd
+# запускает `php yii ...`, а yii и конфиги генерирует именно init (сам init —
+# автономный скрипт, vendor ему не нужен). --overwrite=n делает запуск
+# идемпотентным: существующие локальные файлы не перетираются, cookie key
+# подставляется только в пустое значение (первый запуск) — повторный релиз
+# не сбрасывает сессии/куки. Сообщения "Error. Operation chmod not permitted"
+# от setWritable допустимы: права каталогов роль выставляет сама следующей
+# задачей.
+- name: Initialize Yii2 environment
+  become_user: "{{ release_owner }}"
+  ansible.builtin.command:
+    cmd: "php init --env={{ release_env_name }} --overwrite=n --delete=n"
+    chdir: "{{ release_app_dir }}"
+  register: init_result
+  changed_when: "'generate' in init_result.stdout"
+  notify: Reload php-fpm
+
+# Каталоги, куда пишет приложение: создать при отсутствии и привести права
+# (в т.ч. после chmod 0777 из init). ДО composer install: post-install-cmd
+# (Modman recompile) пишет merge-plan в var/config. НЕ рекурсивно: файлы
+# внутри создаёт www-data со своими правами, а рекурсивный mode сделал бы
+# файлы исполняемыми.
+- name: Ensure application writable directories
+  ansible.builtin.file:
+    path: "{{ release_app_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ release_owner }}"
+    group: "{{ release_web_user }}"
+    mode: "{{ release_writable_mode }}"
+  loop: "{{ release_writable_dirs }}"
+
+# Первичный merge-plan.php здесь НЕ сеется: bootstrap-план разворачивает сам
+# `init` (задача выше) из скелета окружения, а полный план генерит post-install
+# recompile ниже. См. defaults и app/environments/{dev,prod}/var/config.
+
+# ПОСЛЕ init (развернувшего bootstrap merge-plan) и writable-каталогов:
+# post-install-cmd из composer.json (`php yii Modman/modules/recompile`)
+# требует yii-скрипт, локальные конфиги, записываемый var/config и merge-plan
+# для бутстрапа; recompile перезапишет bootstrap-план полным.
+- name: Install PHP dependencies (composer install)
+  become_user: "{{ release_owner }}"
+  ansible.builtin.command:
+    cmd: composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+    chdir: "{{ release_app_dir }}"
+  register: composer_result
+  # Composer пишет ход установки в stderr; при актуальном vendor сообщает
+  # "Nothing to install, update or remove" — это не изменение.
+  changed_when: "'Nothing to install, update or remove' not in (composer_result.stderr + composer_result.stdout)"
+  notify: Reload php-fpm

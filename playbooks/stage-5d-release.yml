@@ -1,0 +1,91 @@
+##########################################################
+#
+# **Цель**: Релиз приложения из GitHub.
+#
+# Stage 5d: git clone/pull публичного репо + composer install --no-dev +
+# php init (Production) + права www-data на записываемые каталоги.
+# Опционально — импорт дампа БД из mysql_dump/dump.sql: `make release-db`
+# (-e release_import_db=true; РАЗРУШИТЕЛЬНО, по умолчанию выкл).
+# Запускается отдельно (`make release`), в full-deploy НЕ входит.
+# Требования: stage-4 выполнен (php-fpm, composer, nginx, app_secrets).
+# Резервная альтернатива: stage-5c (rsync локального дерева).
+#
+##########################################################
+---
+- name: Pre-flight checks for release
+  hosts: site
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Assert PHP-FPM is active (stage-4 выполнен)
+      ansible.builtin.command: systemctl is-active php{{ php_version }}-fpm
+      register: fpm_status
+      changed_when: false
+      failed_when: fpm_status.stdout != 'active'
+
+    - name: Assert Composer is available (роль composer из stage-4)
+      ansible.builtin.command: composer --version
+      changed_when: false
+
+- name: Stage 5d - Application release
+  hosts: site
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
+  gather_facts: true
+  roles:
+    - ../roles/web-server/release
+
+# Post-conditions: релиз реально пригоден к работе. Пути/имена захардкожены,
+# как и прочие списки в post-checks; источник правды — роль release.
+- name: Stage 5d - Post-checks
+  hosts: site
+  remote_user: "{{ ssh_automation_user }}"
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Stat release artefacts
+      ansible.builtin.stat:
+        path: "{{ web_root }}/{{ domain_name }}/{{ item }}"
+      register: release_artefacts
+      loop:
+        - vendor/autoload.php
+        - backend/pub/index.php
+        - frontend/pub/index.php
+        # merge-plan: без него ConfigFactory не соберёт конфиг ни одному
+        # приложению (посев + post-install recompile должны были его оставить).
+        - var/config/merge-plan.php
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Assert release artefacts exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: >-
+          {{ item.item }} отсутствует — релиз неполный
+          (composer install или php init не отработали).
+      loop: "{{ release_artefacts.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # Код читаем PHP-процессом: автозагрузчик composer грузится под www-data.
+    - name: Assert autoloader loads under www-data
+      ansible.builtin.command: >-
+        php -r "require '{{ web_root }}/{{ domain_name }}/vendor/autoload.php';"
+      become_user: www-data
+      changed_when: false
+
+    # Записываемые каталоги реально доступны www-data на запись (setgid-модель).
+    - name: Assert writable directories are writable by www-data
+      ansible.builtin.command: test -w {{ web_root }}/{{ domain_name }}/{{ item }}
+      become_user: www-data
+      changed_when: false
+      loop:
+        - backend/pub/assets
+        - frontend/pub/assets
+        - static
+        - var/config
+        - var/runtime
+      loop_control:
+        label: "{{ item }}"

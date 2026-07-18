@@ -9,7 +9,7 @@ server {
    server_tokens off; # отключить отображение номера версии в сообщениях об ошибках и заголовке ответа
 
    server_name {{ domain_name }} www.{{ domain_name }};
-   root        {{ web_root }}/{{ domain_name }}/app/frontend/pub/;
+   root        {{ web_root }}/{{ domain_name }}/frontend/pub/;
    index       index.php;
 
    # не загружать, если источник не совпадает (запретить загружать в Iframe)
@@ -62,7 +62,7 @@ server {
    server_tokens off; # отключить отображение версии в сообщениях об ошибках и заголовке ответа
 
    server_name adm.{{ domain_name }} www.adm.{{ domain_name }};
-   root        {{ web_root }}/{{ domain_name }}/app/backend/pub/;
+   root        {{ web_root }}/{{ domain_name }}/backend/pub/;
    index       index.php;
 
    # не загружать, если источник не совпадает (запретить загружать в Iframe)
@@ -109,7 +109,7 @@ server {
    server_tokens off; # отключить отображение версии в сообщениях об ошибках и заголовке ответа
 
    server_name files.{{ domain_name }} www.files.{{ domain_name }};
-   root        {{ web_root }}/{{ domain_name }}/app/static/;
+   root        {{ web_root }}/{{ domain_name }}/static/;
 
    # не загружать, если источник не совпадает (запретить загружать в Iframe)
    add_header X-Frame-Options "SAMEORIGIN";

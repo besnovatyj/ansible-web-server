@@ -54,6 +54,12 @@ stage-5b: agent-up ## Queue workers (только после деплоя исх
 stage-5c: agent-up ## (РЕЗЕРВ) data_transfer
 	$(PLAY) playbooks/stage-5c-data-transfer.yml
 
+release: agent-up ## Релиз приложения из GitHub: git + composer install + init (после Stage 4)
+	$(PLAY) playbooks/stage-5d-release.yml
+
+release-db: agent-up ## Релиз + импорт дампа БД из mysql_dump/dump.sql (РАЗРУШИТЕЛЬНО: перезаписывает БД)
+	$(PLAY) playbooks/stage-5d-release.yml -e release_import_db=true
+
 stage-6: agent-up ## Verification
 	$(PLAY) playbooks/stage-6-verification.yml
 

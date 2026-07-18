@@ -1,0 +1,7 @@
+---
+# Graceful reload PHP-FPM после смены кода: мастер-процесс пересоздаёт воркеров
+# (сброс OPcache), активные запросы дорабатывают, соединения не рвутся.
+- name: Reload php-fpm
+  ansible.builtin.service:
+    name: "php{{ php_version }}-fpm"
+    state: reloaded

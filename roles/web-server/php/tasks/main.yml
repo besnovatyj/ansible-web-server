@@ -83,13 +83,28 @@
     directory_mode: '0755'
   notify: Restart PHP-FPM
 
-- name: Copy PHP configuration files to cli/conf.d
+# В CLI — всё, КРОМЕ security.ini: его hardening предназначен web-поверхности
+# (FPM). В CLI `allow_url_fopen=Off` и `disable_functions` c proc_open ломают
+# деплой: composer install не может качать дисты (https-обёртка) и падает на
+# git-fallback (proc_open); php init / yii-консоль — тоже CLI. Разделение
+# fpm/cli-конфигов — штатная модель PHP в Ubuntu.
+- name: Copy PHP configuration files to cli/conf.d (без security.ini)
   ansible.builtin.copy:
-    src: files/conf.d/
+    src: "{{ item }}"
     dest: /etc/php/{{ php_version }}/cli/conf.d/
     owner: root
     group: root
     mode: '0644'
+  loop: "{{ query('fileglob', 'files/conf.d/*.ini') | reject('search', 'security.ini') | list }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+# Убрать security.ini из CLI на серверах, накативших прежнюю версию роли
+# (копировалась вся директория): иначе composer/init остаются сломанными.
+- name: Remove security.ini from cli/conf.d
+  ansible.builtin.file:
+    path: "/etc/php/{{ php_version }}/cli/conf.d/security.ini"
+    state: absent
 
 - name: Copy and process PHP configuration templates from templates/conf.d
   ansible.builtin.template:
