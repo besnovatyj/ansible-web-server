@@ -39,6 +39,8 @@ server {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param PATH_INFO $fastcgi_path_info;
+        fastcgi_param SSL_PROTOCOL $ssl_protocol; # Для модуля info
+        fastcgi_param SSL_CIPHER   $ssl_cipher; # Для модуля info
         try_files $uri =404;
         fastcgi_read_timeout 60s;
         fastcgi_connect_timeout 60s;
