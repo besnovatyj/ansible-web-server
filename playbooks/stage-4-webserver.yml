@@ -8,7 +8,8 @@
 # 3) MySQL (install + secure + setup)
 # 4) Nginx (3 server block)
 # 5) PHP 8.4 + модули + FPM pool
-# 6) Очистка `apt_clean`
+# 6) Composer (для release-роли, stage-5d)
+# 7) Очистка `apt_clean`
 #
 ##########################################################
 ---
@@ -38,6 +39,9 @@
     - ../roles/web-server/mysql
     - ../roles/web-server/nginx
     - ../roles/web-server/php
+    # Composer из apt — нужен release-роли (stage-5d: composer install на
+    # сервере). ПОСЛЕ php: зависит от php-cli.
+    - ../roles/web-server/composer
     # Секреты приложения в /run/secrets (файловый путь SecretReader, приоритет №1).
     # ПОСЛЕ php: www-data уже существует; значения — те же, что задали redis/mysql.
     - ../roles/web-server/app_secrets
@@ -91,6 +95,19 @@
         host: 127.0.0.1
         timeout: 5
         state: started
+
+    # Роль composer: бинарник реально доступен (нужен release-роли stage-5d).
+    - name: Assert Composer is available
+      ansible.builtin.command: composer --version
+      changed_when: false
+
+    # PHP CLI не задушен hardening-ом FPM: composer качает дисты через
+    # allow_url_fopen, git-fallback и Process требуют proc_open. Ломается,
+    # если security.ini снова попадёт в cli/conf.d (см. роль php).
+    - name: Assert PHP CLI is usable for composer (proc_open + allow_url_fopen)
+      ansible.builtin.command: >-
+        php -r 'exit(function_exists("proc_open") && ini_get("allow_url_fopen") ? 0 : 1);'
+      changed_when: false
 
     # app_secrets: файловые секреты для SecretReader реально на месте и читаемы
     # www-data (под ним php-fpm и queue-воркеры). Пути/имена захардкожены, как и
