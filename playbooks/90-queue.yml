@@ -19,6 +19,29 @@
 # (handler Restart yii-queue workers).
 ##########################################################
 ---
+# Pre-flight: без кода воркеры не «упадут сразу» — они будут циклично
+# рестартовать под systemd, тихо съедая ресурсы. Проверяем главное
+# предусловие (исходники задеплоены) явно, до установки юнитов.
+-   name: Pre-flight checks for 90-queue
+    hosts: site
+    remote_user: "{{ ssh_automation_user }}"
+    become: true
+    gather_facts: false
+    tasks:
+      -   name: Stat yii entry script (исходники задеплоены 70-release)
+          ansible.builtin.stat:
+            path: "{{ web_root }}/{{ domain_name }}/yii"
+          register: yii_stat
+
+      -   name: Assert application sources are deployed
+          ansible.builtin.assert:
+            that:
+              - yii_stat.stat.exists
+            fail_msg: >-
+              {{ web_root }}/{{ domain_name }}/yii не найден — исходники не
+              задеплоены. Сначала `make 70-release`, иначе воркеры поднимутся
+              и будут циклично падать.
+
 -   name: 90-queue - Queue workers
     hosts: site
     remote_user: "{{ ssh_automation_user }}"
