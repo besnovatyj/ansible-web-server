@@ -2,33 +2,34 @@
 #
 # **Цель**: Релиз приложения из GitHub.
 #
-# Stage 5d: git clone/pull публичного репо + composer install --no-dev +
+# 70-release: git clone/pull публичного репо + composer install --no-dev +
 # php init (Production) + права www-data на записываемые каталоги.
-# Опционально — импорт дампа БД из mysql_dump/dump.sql: `make release-db`
+# Опционально — импорт дампа БД из mysql_dump/dump.sql: `make 70-release-db`
 # (-e release_import_db=true; РАЗРУШИТЕЛЬНО, по умолчанию выкл).
-# Запускается отдельно (`make release`), в full-deploy НЕ входит.
-# Требования: stage-4 выполнен (php-fpm, composer, nginx, app_secrets).
-# Резервная альтернатива: stage-5c (rsync локального дерева).
+# Первый шаг фазы deploy (в provision НЕ входит); при последующих выкладках
+# запускается отдельно (`make 70-release`).
+# Требования: 60-webserver выполнен (php-fpm, composer, nginx, app_secrets).
+# Резервная альтернатива: optional-data-transfer (rsync локального дерева).
 #
 ##########################################################
 ---
-- name: Pre-flight checks for release
+- name: Pre-flight checks for 70-release
   hosts: site
   remote_user: "{{ ssh_automation_user }}"
   become: true
   gather_facts: false
   tasks:
-    - name: Assert PHP-FPM is active (stage-4 выполнен)
+    - name: Assert PHP-FPM is active (60-webserver выполнен)
       ansible.builtin.command: systemctl is-active php{{ php_version }}-fpm
       register: fpm_status
       changed_when: false
       failed_when: fpm_status.stdout != 'active'
 
-    - name: Assert Composer is available (роль composer из stage-4)
+    - name: Assert Composer is available (роль composer из 60-webserver)
       ansible.builtin.command: composer --version
       changed_when: false
 
-- name: Stage 5d - Application release
+- name: 70-release - Application release
   hosts: site
   remote_user: "{{ ssh_automation_user }}"
   become: true
@@ -38,7 +39,7 @@
 
 # Post-conditions: релиз реально пригоден к работе. Пути/имена захардкожены,
 # как и прочие списки в post-checks; источник правды — роль release.
-- name: Stage 5d - Post-checks
+- name: 70-release - Post-checks
   hosts: site
   remote_user: "{{ ssh_automation_user }}"
   become: true

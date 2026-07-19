@@ -1,5 +1,5 @@
 ---
-# Git нужен модулю ansible.builtin.git на целевом хосте (stage-1 его не ставит).
+# Git нужен модулю ansible.builtin.git на целевом хосте (30-server-base его не ставит).
 - name: Ensure Git is present
   ansible.builtin.apt:
     name: "git"
@@ -20,7 +20,8 @@
     group: "{{ release_owner }}"
     mode: "0755"
 
-# Защита от конфликта с прежней не-git выкладкой (например, rsync stage-5c):
+# Защита от конфликта с прежней не-git выкладкой (например, rsync
+# optional-data-transfer):
 # git не клонирует в непустой каталог без .git. Наличие ФАЙЛОВ (не пустых
 # каталогов) — реальное содержимое, его не удаляем — останавливаемся и сообщаем.
 - name: Scan release root content
@@ -43,8 +44,8 @@
         or (release_root_scan.files | rejectattr('isdir') | list | length) == 0
     fail_msg: >-
       {{ release_root }} содержит файлы и не является git-клоном (вероятно,
-      прежняя rsync-выкладка stage-5c или ручная). Перенесите или удалите
-      его содержимое вручную и повторите `make release`.
+      прежняя rsync-выкладка optional-data-transfer или ручная). Перенесите или
+      удалите его содержимое вручную и повторите `make 70-release`.
 
 # Пустой скелет web-корней, созданный ролью nginx до первого релиза
 # ({frontend,backend}/pub, static), мешает git clone. Файлов в нём

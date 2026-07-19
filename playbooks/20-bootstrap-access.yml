@@ -2,7 +2,7 @@
 #
 # **Цель**: Первичная доставка ключей и создание пользователей.
 #
-# Stage 1b: bootstrap (ЕДИНСТВЕННЫЙ плейбук, ходящий по ПАРОЛЮ root)
+# 20-bootstrap-access: bootstrap (ЕДИНСТВЕННЫЙ плейбук, ходящий по ПАРОЛЮ root)
 #
 #   1) Pre-flight (localhost): vault_root_password задан и не пуст;
 #      ssh-agent поднят и содержит automation-ключ (нужен для probe + verify).
@@ -14,14 +14,14 @@
 #   4) Verify: automation-вход по ключу работает (через ssh-agent).
 #
 # После этого парольный доступ Ansible больше НЕ нужен — все остальные
-# стадии ходят automation-пользователем по ключу (см. inventory/hosts.yml),
+# плейбуки ходят automation-пользователем по ключу (см. inventory/hosts.yml),
 # passphrase разлочен в ssh-agent один раз через `make agent-up`.
 #
-# Запускать ПЕРВЫМ среди remote-стадий (сразу после stage-0).
+# Запускать ПЕРВЫМ среди remote-плейбуков (сразу после 10-local-init).
 # Требует `sshpass` на контроллере (парольная аутентификация SSH).
 ##########################################################
 ---
-- name: Pre-flight checks for stage 1b
+- name: Pre-flight checks for 20-bootstrap-access
   hosts: localhost
   gather_facts: false
   tasks:
@@ -50,7 +50,7 @@
     # Pre-flight: ssh-agent должен быть поднят с automation-ключом — иначе
     # probe ниже всегда вернёт rc!=0 и Ansible полезет в bootstrap, после чего
     # упадёт finальный verify_ssh. Списком только automation: bes и emergency
-    # понадобятся в stage-2 и далее, проверим там.
+    # понадобятся в 40-server-access и далее, проверим там.
     - name: Pre-flight - SSH agent готов и automation-ключ заряжен
       ansible.builtin.include_role:
         name: ../roles/system/ssh_agent_check

@@ -2,7 +2,7 @@
 # Composer из apt (в Ubuntu 24.04 noble — Composer 2.7), а не installer с
 # getcomposer.org: обновления подхватит unattended-upgrades (fire-and-forget),
 # не нужен отдельный механизм self-update. Нужен для release-роли
-# (stage-5d: composer install на сервере). php-cli уже установлен ролью php.
+# (70-release: composer install на сервере). php-cli уже установлен ролью php.
 - name: Ensure Composer is present
   become: true
   apt:

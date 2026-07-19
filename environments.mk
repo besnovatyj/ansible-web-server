@@ -25,11 +25,11 @@ export ANSIBLE_CONFIG  := ./ansible.cfg
 # -i KEY клиент матчит KEY по fingerprint в агенте).
 #
 # Состояние агента живёт в $(AGENT_ENV) рядом с Makefile (в .gitignore). Каждая
-# stage-цель сама делает `. ./$(AGENT_ENV) && ansible-playbook ...` через
+# цель-плейбук сама делает `. ./$(AGENT_ENV) && ansible-playbook ...` через
 # обёртку $(PLAY) — иначе make запускает каждую строку рецепта в свежей shell
-# и SSH_AUTH_SOCK теряется. Только stage-0 (локально, ключей ещё нет) от
-# агента не зависит; stage-1b зависит, потому что после bootstrap'а ему надо
-# подключиться automation-юзером (по ключу с passphrase) для verify_ssh.
+# и SSH_AUTH_SOCK теряется. Только 10-local-init (локально, ключей ещё нет) от
+# агента не зависит; 20-bootstrap-access зависит, потому что после bootstrap'а
+# ему надо подключиться automation-юзером (по ключу с passphrase) для verify_ssh.
 #
 # Список ключей в $(AGENT_KEYS) держим на уровне Makefile-конфига, не из
 # инвентаря: чтение ansible-inventory в каждом рецепте дорого и хрупко
@@ -44,7 +44,7 @@ AGENT_KEYS      := \
     $(SSH_KEYS_DIR)/key_$(DOMAIN)_bes \
     $(SSH_KEYS_DIR)/key_$(DOMAIN)_emergency_root
 
-# Обёртка для всех remote-стадий: сначала подцепляет SSH_AUTH_SOCK из
+# Обёртка для всех remote-плейбуков: сначала подцепляет SSH_AUTH_SOCK из
 # .agent.env, потом запускает ansible-playbook. `.ONESHELL` + single shell:
 # `. ./$(AGENT_ENV)` экспортирует переменные на оставшуюся часть recipe.
 PLAY            := . ./$(AGENT_ENV) && ansible-playbook -i inventory/hosts.yml
@@ -58,8 +58,10 @@ export AGENT_KEYS
 # .PHONY (цели, не соответствующие реальным файлам)
 # =============================================================================
 .PHONY: agent-up agent-down agent-status \
-        stage-0 stage-1b stage-1 stage-2 stage-3 stage-4 \
-        stage-5a stage-5b stage-5c stage-6 \
-        full-deploy docker-install \
+        10-local-init 20-bootstrap-access 30-server-base 40-server-access \
+        50-server-security 60-webserver 70-release 70-release-db \
+        80-certbot 80-certbot-staging 80-certbot-force 90-queue verify \
+        optional-data-transfer optional-docker \
+        provision deploy \
         vault-encrypt vault-create vault-edit vault-view \
         init-ansible galaxy-install syntax-check inventory-graph help

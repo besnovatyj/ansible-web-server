@@ -2,13 +2,15 @@
 #
 # **Цель**: Подготовить локальную машину для работы с сервером.
 #
-# Stage 0: локальная инициализация
+# 10-local-init: локальная инициализация
 # 1) Pre-flight: проверка что inventory загружен
-# 2) Генерация SSH-ключей (ordinary + emergency) в secrets/ssh/
+# 2) Генерация SSH-ключей (server_users + emergency root) в ~/.ssh/<домен>/
+#    (local_ssh_keys_dir из group_vars/all/ssh.yml; ранее было secrets/ssh/ —
+#    переехали из-за прав на drvfs bind-mount)
 # 3) Добавление отпечатка сервера в ~/.ssh/known_hosts
 ##########################################################
 ---
-- name: Pre-flight checks for stage 0
+- name: Pre-flight checks for 10-local-init
   hosts: localhost
   gather_facts: false # для localhost — не нужны
   tasks:
@@ -19,15 +21,15 @@
           - groups['site'] | length > 0
         fail_msg: "Inventory file does not define group 'site'. Запустите с -i inventory/hosts.yml"
 
-    - name: Assert vault_root_password is set (нужен для stage-1b bootstrap)
+    - name: Assert vault_root_password is set (нужен для 20-bootstrap-access)
       assert:
         that:
           - vault_root_password is defined
           - vault_root_password | length > 0
         fail_msg: >-
-          vault_root_password не определён — без него stage-1b не доставит
-          ключи по паролю root. Заполни secrets/secrets.yml и зашифруй значения
-          в group_vars/all/secrets.vault (см. vault.yml).
+          vault_root_password не определён — без него 20-bootstrap-access не
+          доставит ключи по паролю root. Заполни secrets/secrets.yml и зашифруй
+          значения в group_vars/all/secrets.vault (см. vault.yml).
 
     - name: Assert ssh_automation_user is valid in server_users
       assert:
@@ -48,7 +50,7 @@
 # Post-conditions: ключи реально созданы с правильными правами (см. TODO/000-NOTES.MD).
 # Приватный — 0600, публичный — 0644. Проверяются ключи всех server_users
 # (включая automation) + аварийная пара root.
-- name: Stage 0 - Post-checks (keys exist with correct perms)
+- name: 10-local-init - Post-checks (keys exist with correct perms)
   hosts: localhost
   gather_facts: false
   tasks:

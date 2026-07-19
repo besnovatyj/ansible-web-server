@@ -16,9 +16,10 @@
 #   verify_target_user (str)              — имя пользователя
 #   verify_target_is_root (bool=false)    — проверять ли PermitRootLogin
 #   verify_permitroot_strict (bool=false) — strict: только prohibit-password|
-#                                           without-password (для Stage-6
-#                                           после hardening); false разрешает
-#                                           ещё `yes` (для Stage-2/3 pre-check).
+#                                           without-password (для verify и
+#                                           post-check'ов после hardening);
+#                                           false разрешает ещё `yes` (pre-check
+#                                           в 40-server-access/50-server-security).
 ##
 ---
 - name: "verify_sshd_policy[{{ verify_target_user }}]: read effective sshd config"
@@ -59,7 +60,7 @@
       (strict={{ verify_permitroot_strict | default(false) | bool }}).
     success_msg: "PermitRootLogin={{ _sshd_cfg.permitrootlogin }} (допустимо)"
   vars:
-    # strict=true (Stage-6 после hardening): только prohibit-password или
+    # strict=true (verify после hardening): только prohibit-password или
     # without-password (устаревший синоним до OpenSSH 7.0; sshd -T может
     # вернуть любой из двух в зависимости от версии). `yes` тоже разрешает
     # ключ-вход, но допускает регрессию политики → запрещён в strict.

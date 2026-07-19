@@ -45,7 +45,7 @@ fi
 loaded="$(ssh-add -l 2>/dev/null || true)"
 for k in $AGENT_KEYS; do
     if [ ! -f "$k.pub" ]; then
-        echo "FAIL: $k.pub не найден — сгенерируйте ключи (make stage-0)"
+        echo "FAIL: $k.pub не найден — сгенерируйте ключи (make 10-local-init)"
         exit 1
     fi
     fp="$(ssh-keygen -lf "$k.pub" | awk '{print $2}')"

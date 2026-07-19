@@ -18,9 +18,9 @@
   notify: Restart nginx
 
 # Только гарантия существования (nginx-у для чтения хватает 0755 root:root,
-# которые даст umask). owner/mode НЕ задаём: после релиза (stage-5d) каталогами
+# которые даст umask). owner/mode НЕ задаём: после релиза (70-release) каталогами
 # владеет деплой-модель роли release (код — ansible, writable — setgid
-# ansible:www-data), и повторный прогон stage-4 не должен её перетирать.
+# ansible:www-data), и повторный прогон 60-webserver не должен её перетирать.
 - name: Create web roots for all configured nginx sites
   ansible.builtin.file:
     path: "{{ item.web_root }}"

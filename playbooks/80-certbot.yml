@@ -2,18 +2,18 @@
 #
 # Цель: получить SSL-сертификаты Let's Encrypt и переписать конфиг Nginx на HTTPS.
 #
-# Stage 5a: Let's Encrypt сертификаты
+# 80-certbot: Let's Encrypt сертификаты
 # 1) Устанавливает certbot + python3-certbot-nginx
 # 2) Получает сертификаты для всех доменов из `nginx_sites[*].server_name`
 # 3) Запускает `certbot --nginx --non-interactive --agree-tos -m {{ certbot_email }} -d ...` — Certbot сам редактирует Nginx
 # 4) Регистрирует systemd certbot.timer
 #
-# Запускать после Stage 4 и настройки DNS.
-# Предусловия для запуска: Stage 4 успешно прошёл, DNS на доменах указывает на этот сервер,
+# Запускать после 60-webserver и настройки DNS.
+# Предусловия для запуска: 60-webserver успешно прошёл, DNS на доменах указывает на этот сервер,
 # проверь руками `dig +short {{ domain_name }}` показывает IP сервера.
 ##########################################################
 ---
--   name: Pre-flight checks for stage 5a
+-   name: Pre-flight checks for 80-certbot
     hosts: site
     gather_facts: false
     tasks:
@@ -31,7 +31,7 @@
               DNS для {{ domain_name }} указывает на {{ dns_check.stdout | trim }},
               а сервер — {{ host_ip }}. Поправь DNS и повтори.
 
--   name: Stage 5a - Certbot
+-   name: 80-certbot - Certbot
     hosts: site
     remote_user: "{{ ssh_automation_user }}"
     become: true
@@ -40,7 +40,7 @@
 
 # Post-conditions: сертификат выпущен и certbot не сломал конфиг nginx
 # (он редактирует /etc/nginx сам — обязательно перепроверяем). См. TODO/000-NOTES.MD.
--   name: Stage 5a - Post-checks
+-   name: 80-certbot - Post-checks
     hosts: site
     remote_user: "{{ ssh_automation_user }}"
     become: true

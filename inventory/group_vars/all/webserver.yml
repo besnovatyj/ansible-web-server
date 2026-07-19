@@ -80,7 +80,7 @@ nginx_sites:
     php_fpm: false
 
 ##########################################################
-# YII2 QUEUE WORKERS (stage-5b-queue)
+# YII2 QUEUE WORKERS (90-queue)
 ##########################################################
 
 # Сколько systemd-воркеров yii-queue@N включить и запустить.

@@ -1,8 +1,8 @@
 ##########################################################
 #
-# **Цель**: Hardening. Запускать **только после** успешного Stage 2.
+# **Цель**: Hardening. Запускать **только после** успешного 40-server-access.
 #
-# Stage 3: hardening
+# 50-server-security: hardening
 # 1) **pre-check** реальный SSH-вход root + всех server_users (через
 #    ssh-agent — `make agent-up` заряжает passphrase-ключи). Sshd-политика
 #    в non-strict режиме (до hardening допустим PermitRootLogin=yes).
@@ -16,11 +16,11 @@
 # 7) `app_armor` (опционально) MAC-профили в режиме **complain** сначала
 #
 # Подключение automation-пользователем по ключу (sudo NOPASSWD).
-# Запускать ТОЛЬКО после успешного Stage 2.
+# Запускать ТОЛЬКО после успешного 40-server-access.
 #
 ##########################################################
 ---
-- name: Pre-flight checks for stage 3
+- name: Pre-flight checks for 50-server-security
   hosts: site
   gather_facts: false
   tasks:
@@ -42,7 +42,7 @@
               | map('regex_replace', '$', '.pub')
               | list) }}
 
-- name: Stage 3 - Security hardening
+- name: 50-server-security - Security hardening
   hosts: site
   remote_user: "{{ ssh_automation_user }}"
   become: true
@@ -133,7 +133,7 @@
 
 # fail2ban с `[sshd]` jail включаем **после** post-check SSH, не до — иначе во время
 # exhaustive проверки SSH сам контроллер может попасть в бан, если что-то пойдёт не так с ключами.
-- name: Stage 3 - Enable fail2ban (after SSH verification)
+- name: 50-server-security - Enable fail2ban (after SSH verification)
   hosts: site
   remote_user: "{{ ssh_automation_user }}"
   become: true

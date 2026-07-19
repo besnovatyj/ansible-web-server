@@ -7,7 +7,7 @@ all: # Корневая группа, включает все хосты. Не �
           # Профиль подключения по умолчанию = automation-пользователь по ключу
           # БЕЗ passphrase. Единственное, что нужно задать руками здесь, —
           # ansible_host (IP). Парольный доступ root НЕ светим в инвентаре:
-          # он живёт только внутри stage-1b-bootstrap-keys.yml (play-level vars).
+          # он живёт только внутри 20-bootstrap-access.yml (play-level vars).
           ansible_connection: ssh
           ansible_host: 000.000.000.000
           ansible_port: "{{ target_ssh_port }}"

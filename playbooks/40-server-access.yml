@@ -2,7 +2,7 @@
 #
 # **Цель**: Доводка доступа после bootstrap. **Без отключения пароля!**
 #
-# Stage 2: настройка пользовательского доступа
+# 40-server-access: настройка пользовательского доступа
 #   1) Перенаправление SSH-логов в journald
 #   2) Verify SSH-входа: root (emergency-ключ) + каждый server_user (свой ключ)
 #      через реальный SSH-вход (ключи с passphrase разлочены в ssh-agent
@@ -10,13 +10,13 @@
 #   3) Проверка sshd-политики (PubkeyAuthentication, PermitRootLogin,
 #      AllowUsers/DenyUsers) — pure-Ansible, без shell.
 #
-# Создание пользователей и доставка ключей выполнены в stage-1b (bootstrap).
+# Создание пользователей и доставка ключей выполнены в 20-bootstrap-access.
 # Подключаемся automation-пользователем по ключу (sudo NOPASSWD).
 #
-# ВНИМАНИЕ: пароль НЕ отключается, hardening — в Stage 3.
+# ВНИМАНИЕ: пароль НЕ отключается, hardening — в 50-server-security.
 ##########################################################
 ---
-- name: Pre-flight checks for stage 2
+- name: Pre-flight checks for 40-server-access
   hosts: site
   gather_facts: false
   tasks:
@@ -41,7 +41,7 @@
               | map('regex_replace', '$', '.pub')
               | list) }}
 
-- name: Stage 2 - User access setup
+- name: 40-server-access - User access setup
   hosts: site
   remote_user: "{{ ssh_automation_user }}"
   become: true

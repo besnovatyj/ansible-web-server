@@ -23,7 +23,7 @@ redis_password: "{{ vault_redis_password }}"
 # Потребитель — роль web-server/app_secrets → файл /run/secrets/ALTCHA_HMAC_KEY.
 altcha_hmac_key: "{{ vault_altcha_hmac_key }}"
 # Сначала пароль, потом копирование ключей, потом уже без пароля. Чтобы автоматизировать копирование ключей, нужен пароль.
-# АКТУАЛЬНО: используется stage-1b-bootstrap-keys.yml (единственный плейбук,
+# АКТУАЛЬНО: используется 20-bootstrap-access.yml (единственный плейбук,
 # ходящий по паролю root). Переменная НЕ «мёртвая» — assert на неё валиден.
 root_password: "{{ vault_root_password }}"
 

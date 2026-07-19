@@ -1,7 +1,7 @@
 ##
 # Доставка публичных ключей на сервер.
 #
-# Запускается из stage-1b-bootstrap-keys.yml под root.
+# Запускается из 20-bootstrap-access.yml под root.
 #
 # - Каждому пользователю из server_users — его публичный ключ
 #   (key_<domain>_<name>.pub) в ~/.ssh/authorized_keys.

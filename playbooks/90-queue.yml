@@ -1,9 +1,11 @@
 ##########################################################
-# Stage 5b — Yii2 queue workers (systemd)
+# 90-queue — Yii2 queue workers (systemd)
 #
 # Запускается ВРУЧНУЮ после того, как сервер настроен И исходники проекта
-# уже задеплоены: должны существовать {{ web_root }}/{{ domain_name }}/yii
-# и рабочий .env. Плейбук полностью настраивает и запускает очереди.
+# уже задеплоены (70-release): должен существовать
+# {{ web_root }}/{{ domain_name }}/yii; секреты приложения уже разложены в
+# /run/secrets ролью app_secrets (60-webserver) — их читает SecretReader.
+# Плейбук полностью настраивает и запускает очереди.
 #
 # Делает:
 # 1) Ставит systemd-шаблон юнита yii-queue@.service
@@ -17,7 +19,7 @@
 # (handler Restart yii-queue workers).
 ##########################################################
 ---
--   name: Stage 5b - Queue workers
+-   name: 90-queue - Queue workers
     hosts: site
     remote_user: "{{ ssh_automation_user }}"
     become: true

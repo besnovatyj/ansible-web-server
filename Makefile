@@ -19,60 +19,72 @@ agent-status: ## Показать состояние агента и списо�
 	@bash scripts/agent-status.sh
 
 # =============================================================================
-# Stage-цели
+# Цели-плейбуки
 # =============================================================================
-stage-0:  ## Локально: SSH-ключи + known_hosts (агент не нужен — ключей ещё нет)
-	ansible-playbook -i inventory/hosts.yml playbooks/stage-0-local-init.yml
+# Правило именования: цель = имя плейбука без .yml. Номер = позиция в порядке
+# запуска (шаг 10 оставляет место для вставки новых этапов без перенумерации).
+# `verify` без номера — не этап, а повторяемая проверка (запускается когда
+# угодно). Префикс `optional-` = резерв: не входит в комбинированные цели и в
+# syntax-check (имеет право быть нерабочим).
+10-local-init:  ## Локально: SSH-ключи + known_hosts (агент не нужен — ключей ещё нет)
+	ansible-playbook -i inventory/hosts.yml playbooks/10-local-init.yml
 
-stage-1b: agent-up ## Bootstrap: юзеры + ключи по паролю root (ЕДИНСТВЕННЫЙ заход по паролю; нужен sshpass)
-	$(PLAY) playbooks/stage-1b-bootstrap-keys.yml
+20-bootstrap-access: agent-up ## Bootstrap: юзеры + ключи по паролю root (ЕДИНСТВЕННЫЙ заход по паролю; нужен sshpass)
+	$(PLAY) playbooks/20-bootstrap-access.yml
 
-stage-1: agent-up ## ОС: apt, locales, swap, systemd
-	$(PLAY) playbooks/stage-1-server-base.yml
+30-server-base: agent-up ## ОС: apt, locales, swap, systemd
+	$(PLAY) playbooks/30-server-base.yml
 
-stage-2: agent-up ## Доступ: sudo user, деплой ключей, journald, verify (тест SSH)
-	$(PLAY) playbooks/stage-2-server-access.yml
+40-server-access: agent-up ## Доступ: journald для SSH, verify входов root + server_users (тест SSH)
+	$(PLAY) playbooks/40-server-access.yml
 
-stage-3: agent-up ## Безопасность: UFW, sshd hardening, fail2ban
-	$(PLAY) playbooks/stage-3-server-security.yml
+50-server-security: agent-up ## Безопасность: UFW, sshd hardening, unattended-upgrades, fail2ban
+	$(PLAY) playbooks/50-server-security.yml
 
-stage-4: agent-up ## LEMP: Redis, Memcached, MySQL, Nginx, PHP
-	$(PLAY) playbooks/stage-4-webserver.yml
+60-webserver: agent-up ## LEMP: Redis, Memcached, MySQL, Nginx, PHP + composer, app_secrets
+	$(PLAY) playbooks/60-webserver.yml
 
-stage-5a: agent-up ## Certbot (только после Stage 4 + настройки DNS)
-	$(PLAY) playbooks/stage-5a-certbot.yml
+70-release: agent-up ## Релиз приложения из GitHub: git + composer install + init (после 60-webserver)
+	$(PLAY) playbooks/70-release.yml
 
-stage-5a-staging: agent-up ## Certbot против STAGING CA (отладка DNS/пайплайна, сертификат недоверенный)
-	$(PLAY) playbooks/stage-5a-certbot.yml -e certbot_staging=true
+70-release-db: agent-up ## Релиз + импорт дампа БД из mysql_dump/dump.sql (РАЗРУШИТЕЛЬНО: перезаписывает БД)
+	$(PLAY) playbooks/70-release.yml -e release_import_db=true
 
-stage-5a-force: agent-up ## Certbot: принудительный перевыпуск (боевой запуск ПОСЛЕ staging-теста)
-	$(PLAY) playbooks/stage-5a-certbot.yml -e certbot_force_renewal=true
+80-certbot: agent-up ## Certbot (после 60-webserver + настройки DNS)
+	$(PLAY) playbooks/80-certbot.yml
 
-stage-5b: agent-up ## Queue workers (только после деплоя исходников)
-	$(PLAY) playbooks/stage-5b-queue.yml
+80-certbot-staging: agent-up ## Certbot против STAGING CA (отладка DNS/пайплайна, сертификат недоверенный)
+	$(PLAY) playbooks/80-certbot.yml -e certbot_staging=true
 
-stage-5c: agent-up ## (РЕЗЕРВ) data_transfer
-	$(PLAY) playbooks/stage-5c-data-transfer.yml
+80-certbot-force: agent-up ## Certbot: принудительный перевыпуск (боевой запуск ПОСЛЕ staging-теста)
+	$(PLAY) playbooks/80-certbot.yml -e certbot_force_renewal=true
 
-release: agent-up ## Релиз приложения из GitHub: git + composer install + init (после Stage 4)
-	$(PLAY) playbooks/stage-5d-release.yml
+90-queue: agent-up ## Queue workers (только после 70-release — нужны исходники на сервере)
+	$(PLAY) playbooks/90-queue.yml
 
-release-db: agent-up ## Релиз + импорт дампа БД из mysql_dump/dump.sql (РАЗРУШИТЕЛЬНО: перезаписывает БД)
-	$(PLAY) playbooks/stage-5d-release.yml -e release_import_db=true
+verify: agent-up ## Комплексная проверка сервера (повторяемая, запускается в любой момент)
+	$(PLAY) playbooks/verify.yml
 
-stage-6: agent-up ## Verification
-	$(PLAY) playbooks/stage-6-verification.yml
+optional-data-transfer: agent-up ## (РЕЗЕРВ) rsync-деплой исходников вместо 70-release
+	$(PLAY) playbooks/optional-data-transfer.yml
 
-docker-install: agent-up ## (РЕЗЕРВ) Установка Docker
+optional-docker: agent-up ## (РЕЗЕРВ) Установка Docker
 	$(PLAY) playbooks/optional-docker.yml
 
 # =============================================================================
-# Комбинированные цели
+# Комбинированные цели (фазы жизненного цикла)
 # =============================================================================
-# Порядок: bootstrap (stage-1b) — ПЕРВЫЙ remote-заход; после него Ansible
-# ходит automation-пользователем по ключу. agent-up каждый stage-* зацепит
-# сам — ssh-add ключей произойдёт один раз (повторные вызовы no-op).
-full-deploy: stage-0 stage-1b stage-1 stage-2 stage-3 stage-4 stage-6
+# provision — настройка чистого сервера, обычно запускается ЦЕЛИКОМ.
+# Порядок: bootstrap (20) — ПЕРВЫЙ remote-заход; после него Ansible ходит
+# automation-пользователем по ключу. agent-up каждая цель зацепит сама —
+# ssh-add ключей произойдёт один раз (повторные вызовы no-op).
+provision: 10-local-init 20-bootstrap-access 30-server-base 40-server-access 50-server-security 60-webserver verify
+
+# deploy — первый вывод приложения (код → TLS → очереди → проверка).
+# В отличие от provision чаще запускается ПО ШАГАМ: 70-release — многократно
+# (каждая выкладка), 80-certbot — единожды/редко, 90-queue — после release.
+# Комбинированная цель фиксирует канонический порядок первого прогона.
+deploy: 70-release 80-certbot 90-queue verify
 
 # =============================================================================
 # Vault
@@ -101,8 +113,10 @@ galaxy-install:
 # =============================================================================
 # Утилиты
 # =============================================================================
+# optional-*.yml намеренно вне проверки: резервные плейбуки имеют право быть
+# нерабочими, пока не используются.
 syntax-check:
-	@for f in playbooks/stage-*.yml; do \
+	@for f in playbooks/[0-9]*.yml playbooks/verify.yml; do \
 		echo "Checking $$f..."; \
 		ansible-playbook -i inventory/hosts.yml $$f --syntax-check -vvvv; \
 	done

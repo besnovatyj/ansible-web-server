@@ -3,7 +3,8 @@
 # **Цель**: Комплексная проверка всего сервера. ГИБРИД: часть проверок
 # enforcing (валят прогон), часть — информативный отчёт.
 #
-# Stage 6: комплексная проверка сервера
+# verify: комплексная проверка сервера (повторяемая — запускается в конце
+# provision, в конце deploy и в любой момент вручную)
 # ENFORCING (падает при провале):
 # - SSH: реальный вход root (emergency-ключ) и каждого server_user (свой ключ)
 #   через ssh-agent — passphrase-ключи разлочены `make agent-up`
@@ -15,13 +16,13 @@
 # - Листинг портов (ss), полный php -m, ufw/fail2ban status
 # - HTTP(80)/HTTPS(443) probe
 #
-# NB: HTTP/HTTPS — `failed_when: false` НАМЕРЕННО: Stage 6 не должен падать на
-# отсутствии Certbot (до Stage 5a HTTPS нет, 5xx без серта — нормально).
+# NB: HTTP/HTTPS — `failed_when: false` НАМЕРЕННО: verify не должен падать на
+# отсутствии Certbot (до 80-certbot HTTPS нет, 5xx без серта — нормально).
 # Админ читает вывод сам.
 #
 ##########################################################
 ---
-- name: Stage 6 pre-flight — ssh-agent
+- name: Verify pre-flight — ssh-agent
   hosts: site
   gather_facts: false
   tasks:
@@ -37,7 +38,7 @@
               | map('regex_replace', '$', '.pub')
               | list) }}
 
-- name: Stage 6 - Verify SSH access
+- name: Verify - SSH access
   hosts: site
   gather_facts: false
   remote_user: "{{ ssh_automation_user }}"
@@ -115,7 +116,7 @@
             PasswordAuthentication={{ _sshd_cfg.passwordauthentication | default('(unset)') }}
             KbdInteractiveAuthentication={{ _sshd_cfg.kbdinteractiveauthentication | default('(unset)') }}
 
-- name: Stage 6 - Verify services
+- name: Verify - Services
   hosts: site
   remote_user: "{{ ssh_automation_user }}"
   become: true
@@ -197,7 +198,7 @@
       changed_when: false
       failed_when: f2b_sshd.rc != 0
 
-- name: Stage 6 - HTTP/HTTPS smoke
+- name: Verify - HTTP/HTTPS smoke
   hosts: site
   gather_facts: false
   remote_user: "{{ ssh_automation_user }}"

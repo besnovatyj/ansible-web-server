@@ -2,18 +2,18 @@
 #
 # **Цель**: Установка LEMP-стека.
 #
-# Stage 4: LEMP-стек
+# 60-webserver: LEMP-стек
 # 1) Redis **с паролем** (`requirepass`)
 # 2) Memcached
 # 3) MySQL (install + secure + setup)
 # 4) Nginx (3 server block)
 # 5) PHP 8.4 + модули + FPM pool
-# 6) Composer (для release-роли, stage-5d)
+# 6) Composer (для release-роли, 70-release)
 # 7) Очистка `apt_clean`
 #
 ##########################################################
 ---
-- name: Pre-flight checks for stage 4
+- name: Pre-flight checks for 60-webserver
   hosts: site
   gather_facts: false
   tasks:
@@ -28,7 +28,7 @@
           Required vault variables are missing.
           Проверьте что group_vars/all/secrets.vault расшифровывается и содержит ключи.
 
-- name: Stage 4 - LEMP stack installation
+- name: 60-webserver - LEMP stack installation
   hosts: site
   remote_user: "{{ ssh_automation_user }}"
   become: true
@@ -39,7 +39,7 @@
     - ../roles/web-server/mysql
     - ../roles/web-server/nginx
     - ../roles/web-server/php
-    # Composer из apt — нужен release-роли (stage-5d: composer install на
+    # Composer из apt — нужен release-роли (70-release: composer install на
     # сервере). ПОСЛЕ php: зависит от php-cli.
     - ../roles/web-server/composer
     # Секреты приложения в /run/secrets (файловый путь SecretReader, приоритет №1).
@@ -49,7 +49,7 @@
     # как все сервисы установлены — drop-in'ы Restart=on-failure.
     - ../roles/system/service_restart
 
-- name: Stage 4 - Cleanup
+- name: 60-webserver - Cleanup
   hosts: site
   remote_user: "{{ ssh_automation_user }}"
   become: true
@@ -57,8 +57,8 @@
     - ../roles/system/apt_clean
 
 # Post-conditions: LEMP реально поднят (см. TODO/000-NOTES.MD).
-# 443 здесь НЕ проверяем — HTTPS появляется только после Stage 5a.
-- name: Stage 4 - Post-checks
+# 443 здесь НЕ проверяем — HTTPS появляется только после 80-certbot.
+- name: 60-webserver - Post-checks
   hosts: site
   remote_user: "{{ ssh_automation_user }}"
   become: true
@@ -96,7 +96,7 @@
         timeout: 5
         state: started
 
-    # Роль composer: бинарник реально доступен (нужен release-роли stage-5d).
+    # Роль composer: бинарник реально доступен (нужен release-роли 70-release).
     - name: Assert Composer is available
       ansible.builtin.command: composer --version
       changed_when: false
