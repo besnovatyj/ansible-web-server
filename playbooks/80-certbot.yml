@@ -9,27 +9,43 @@
 # 4) Регистрирует systemd certbot.timer
 #
 # Запускать после 60-webserver и настройки DNS.
-# Предусловия для запуска: 60-webserver успешно прошёл, DNS на доменах указывает на этот сервер,
-# проверь руками `dig +short {{ domain_name }}` показывает IP сервера.
+# Предусловия для запуска: 60-webserver успешно прошёл, DNS ВСЕХ доменов из
+# nginx_sites (main + www, adm, files) указывает на этот сервер — pre-flight
+# ниже проверяет каждый домен через dig сам.
 ##########################################################
 ---
 -   name: Pre-flight checks for 80-certbot
     hosts: site
     gather_facts: false
     tasks:
-      -   name: Resolve {{ domain_name }} (DNS check)
+      # Certbot выпускает ОДИН сертификат на все server_name из nginx_sites
+      # (роль certbot, certbot_domains_args) — незаведённый в DNS поддомен
+      # завалит выпуск целиком, поэтому проверяем КАЖДЫЙ домен, а не только
+      # {{ domain_name }}. Выражение зеркалит роль — единый источник правды.
+      -   name: Resolve every certbot domain (DNS check)
           delegate_to: localhost
-          command: dig +short {{ domain_name }}
-          register: dns_check
+          command: dig +short {{ item }}
+          register: dns_checks
           changed_when: false
+          loop: >-
+            {{ nginx_sites | map(attribute='server_name')
+                           | map('split', ' ')
+                           | flatten | unique | list }}
 
-      -   name: Assert DNS resolves to server IP
+      # `in stdout_lines`, а не `== stdout`: при CNAME dig +short печатает
+      # цепочку (имя цели CNAME + конечный A) в несколько строк — точное
+      # сравнение с одной строкой давало бы ложный отказ.
+      -   name: Assert each domain resolves to server IP
           assert:
             that:
-              - dns_check.stdout | trim == host_ip
+              - host_ip in item.stdout_lines
             fail_msg: |
-              DNS для {{ domain_name }} указывает на {{ dns_check.stdout | trim }},
+              DNS для {{ item.item }} указывает на
+              «{{ item.stdout | trim | default('(пусто)', true) }}»,
               а сервер — {{ host_ip }}. Поправь DNS и повтори.
+          loop: "{{ dns_checks.results }}"
+          loop_control:
+            label: "{{ item.item }}"
 
 -   name: 80-certbot - Certbot
     hosts: site
