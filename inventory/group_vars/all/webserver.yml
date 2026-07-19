@@ -49,8 +49,9 @@ php_modules: [
 
 mysql_db_name: mysql_db_name
 mysql_db_user: mysql_db_user
-mysql_db_user_password: "{{ vault_mysql_db_user_password }}"
-mysql_root_password: "{{ vault_mysql_root_password }}"
+# Пароли (mysql_root_password, mysql_db_user_password) объявлены в vault.yml —
+# единственном месте маппинга vault_* → публичные имена; здесь только
+# несекретные параметры.
 
 ##########################################################
 # CERTBOT

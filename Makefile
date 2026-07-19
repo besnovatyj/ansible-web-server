@@ -53,7 +53,7 @@ agent-status: ## Показать состояние агента и списо�
 80-certbot: agent-up ## Certbot (после 60-webserver + настройки DNS)
 	$(PLAY) playbooks/80-certbot.yml
 
-80-certbot-staging: agent-up ## Certbot против STAGING CA (отладка DNS/пайплайна, сертификат недоверенный)
+80-certbot-staging: agent-up ## Certbot против STAGING CA (отладка DNS/пайплайна, сертификат недоверенный, не расходует квоту, без обращения к Let's Encrypt)
 	$(PLAY) playbooks/80-certbot.yml -e certbot_staging=true
 
 80-certbot-force: agent-up ## Certbot: принудительный перевыпуск (боевой запуск ПОСЛЕ staging-теста)
