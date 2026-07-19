@@ -1,6 +1,7 @@
 ##########################################################
 #
-# Цель: получить SSL-сертификаты Let's Encrypt и переписать конфиг Nginx на HTTPS.
+# **Цель**: Получить SSL-сертификаты Let's Encrypt и переписать конфиг Nginx на HTTPS.
+#           (TLS (после DNS))
 #
 # 80-certbot: Let's Encrypt сертификаты
 # 1) Устанавливает certbot + python3-certbot-nginx

@@ -1,6 +1,7 @@
 ##########################################################
 #
 # **Цель**: Hardening. Запускать **только после** успешного 40-server-access.
+#           (UFW, sshd hardening, unattended, fail2ban)
 #
 # 50-server-security: hardening
 # 1) **pre-check** реальный SSH-вход root + всех server_users (через

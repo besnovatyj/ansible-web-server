@@ -1,6 +1,7 @@
 ##########################################################
 #
 # **Цель**: Установка LEMP-стека.
+#           (LEMP + composer + app_secrets + service_restart)
 #
 # 60-webserver: LEMP-стек
 # 1) Redis **с паролем** (`requirepass`)

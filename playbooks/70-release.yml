@@ -1,6 +1,7 @@
 ##########################################################
 #
 # **Цель**: Релиз приложения из GitHub.
+#           (git clone + composer install + php init)
 #
 # 70-release: git clone/pull публичного репо + composer install --no-dev +
 # php init (Production) + права www-data на записываемые каталоги.
