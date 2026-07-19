@@ -11,20 +11,22 @@
 
 # vault_ssh_key_passphrase уже маппится в ssh.yml
 
-# Имена с суффиксом `_from_vault` — чтобы не конфликтовать с такими же ключами в
-# `webserver.yml` (`mysql_root_password: "{{ vault_mysql_root_password }}"`). Альтернатива
-# — переписать `webserver.yml` так, чтобы он не маппил vault, а только использовал
-# маппинг из этого файла. Решить при реализации.
+# РЕШЕНО (2026-07-19): этот файл — ЕДИНСТВЕННОЕ место маппинга vault_* →
+# публичные имена. Реализована альтернатива из прежнего комментария: суффиксы
+# `_from_vault` убраны, `webserver.yml` vault-переменные больше не трогает.
+# Потребители (роли mysql, redis, app_secrets, release, data_transfer) читают
+# публичные имена, объявленные здесь.
 
-mysql_root_password_from_vault: "{{ vault_mysql_root_password }}"
-mysql_db_user_password_from_vault: "{{ vault_mysql_db_user_password }}"
+mysql_root_password: "{{ vault_mysql_root_password }}"
+mysql_db_user_password: "{{ vault_mysql_db_user_password }}"
 redis_password: "{{ vault_redis_password }}"
-# HMAC-ключ ALTCHA. Конфликта с webserver.yml нет (маппится напрямую, как redis_password).
-# Потребитель — роль web-server/app_secrets → файл /run/secrets/ALTCHA_HMAC_KEY.
+# HMAC-ключ ALTCHA. Потребитель — роль web-server/app_secrets →
+# файл /run/secrets/ALTCHA_HMAC_KEY.
 altcha_hmac_key: "{{ vault_altcha_hmac_key }}"
 # Сначала пароль, потом копирование ключей, потом уже без пароля. Чтобы автоматизировать копирование ключей, нужен пароль.
-# АКТУАЛЬНО: используется 20-bootstrap-access.yml (единственный плейбук,
-# ходящий по паролю root). Переменная НЕ «мёртвая» — assert на неё валиден.
+# NB: 20-bootstrap-access.yml (единственный плейбук, ходящий по паролю root)
+# и его assert'ы читают vault_root_password НАПРЯМУЮ (play-level vars);
+# root_password — публичный алиас, сейчас потребителей не имеет.
 root_password: "{{ vault_root_password }}"
 
 # Пер-пользовательские vault-переменные (vault_user_<name>_password /
