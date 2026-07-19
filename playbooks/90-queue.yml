@@ -24,4 +24,4 @@
     remote_user: "{{ ssh_automation_user }}"
     become: true
     roles:
-      - ../roles/web-server/queue/systemd
+      - web-server/queue/systemd

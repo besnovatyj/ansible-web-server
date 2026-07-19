@@ -34,10 +34,10 @@
   become: true
   gather_facts: true
   roles:
-    - ../roles/system/apt_update
-    - ../roles/system/locales_hostname_timezone
-    - ../roles/system/swap
-    - ../roles/system/systemd
+    - system/apt_update
+    - system/locales_hostname_timezone
+    - system/swap
+    - system/systemd
 
 # Post-conditions: стадия реально достигла цели (см. TODO/000-NOTES.MD).
 - name: 30-server-base - Post-checks

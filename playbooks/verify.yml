@@ -28,7 +28,7 @@
   tasks:
     - name: Pre-flight - SSH agent готов и ключи заряжены
       ansible.builtin.include_role:
-        name: ../roles/system/ssh_agent_check
+        name: system/ssh_agent_check
       vars:
         ssh_agent_required_pubkeys: >-
           {{ [emergency_pubkey_path] +
@@ -48,14 +48,14 @@
     # (PermitRootLogin=prohibit-password — защита от регрессии после hardening).
     - name: Verify root login via emergency key
       ansible.builtin.include_role:
-        name: ../roles/system/verify_ssh
+        name: system/verify_ssh
       vars:
         verify_ssh_user: root
         verify_ssh_key: "{{ emergency_key_path }}"
 
     - name: Verify sshd policy for root (strict — post-hardening)
       ansible.builtin.include_role:
-        name: ../roles/system/verify_sshd_policy
+        name: system/verify_sshd_policy
       vars:
         verify_target_user: root
         verify_target_is_root: true
@@ -63,7 +63,7 @@
 
     - name: Verify each server_user SSH login via own key
       ansible.builtin.include_role:
-        name: ../roles/system/verify_ssh
+        name: system/verify_ssh
       vars:
         verify_ssh_user: "{{ su.name }}"
         verify_ssh_key: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
@@ -74,7 +74,7 @@
 
     - name: Verify sshd policy per server_user (strict — post-hardening)
       ansible.builtin.include_role:
-        name: ../roles/system/verify_sshd_policy
+        name: system/verify_sshd_policy
       vars:
         verify_target_user: "{{ su.name }}"
         verify_target_is_root: false

@@ -35,7 +35,7 @@
   become: true
   gather_facts: true
   roles:
-    - ../roles/web-server/release
+    - web-server/release
 
 # Post-conditions: релиз реально пригоден к работе. Пути/имена захардкожены,
 # как и прочие списки в post-checks; источник правды — роль release.

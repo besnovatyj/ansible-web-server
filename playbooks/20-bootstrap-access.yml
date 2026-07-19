@@ -53,7 +53,7 @@
     # понадобятся в 40-server-access и далее, проверим там.
     - name: Pre-flight - SSH agent готов и automation-ключ заряжен
       ansible.builtin.include_role:
-        name: ../roles/system/ssh_agent_check
+        name: system/ssh_agent_check
       vars:
         ssh_agent_required_pubkeys:
           - "{{ automation_key_path }}.pub"
@@ -113,11 +113,11 @@
 
         - name: Provision all server_users
           include_role:
-            name: ../roles/system/users_provision
+            name: system/users_provision
 
         - name: Push public keys (+ emergency root)
           include_role:
-            name: ../roles/system/ssh_push_keys
+            name: system/ssh_push_keys
 
 - name: Verify automation key works after bootstrap
   hosts: site
@@ -125,7 +125,7 @@
   tasks:
     - name: Verify automation user SSH login via its key
       include_role:
-        name: ../roles/system/verify_ssh
+        name: system/verify_ssh
       vars:
         verify_ssh_user: "{{ ssh_automation_user }}"
         verify_ssh_key: "{{ automation_key_path }}"

@@ -34,27 +34,27 @@
   become: true
   gather_facts: true
   roles:
-    - ../roles/web-server/redis
-    - ../roles/web-server/memcached
-    - ../roles/web-server/mysql
-    - ../roles/web-server/nginx
-    - ../roles/web-server/php
+    - web-server/redis
+    - web-server/memcached
+    - web-server/mysql
+    - web-server/nginx
+    - web-server/php
     # Composer из apt — нужен release-роли (70-release: composer install на
     # сервере). ПОСЛЕ php: зависит от php-cli.
-    - ../roles/web-server/composer
+    - web-server/composer
     # Секреты приложения в /run/secrets (файловый путь SecretReader, приоритет №1).
     # ПОСЛЕ php: www-data уже существует; значения — те же, что задали redis/mysql.
-    - ../roles/web-server/app_secrets
+    - web-server/app_secrets
     # Авто-рестарт критичных сервисов (fire-and-forget): ставится ПОСЛЕ того,
     # как все сервисы установлены — drop-in'ы Restart=on-failure.
-    - ../roles/system/service_restart
+    - system/service_restart
 
 - name: 60-webserver - Cleanup
   hosts: site
   remote_user: "{{ ssh_automation_user }}"
   become: true
   roles:
-    - ../roles/system/apt_clean
+    - system/apt_clean
 
 # Post-conditions: LEMP реально поднят (см. TODO/000-NOTES.MD).
 # 443 здесь НЕ проверяем — HTTPS появляется только после 80-certbot.
