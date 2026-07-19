@@ -78,13 +78,13 @@ optional-docker: agent-up ## (РЕЗЕРВ) Установка Docker
 # Порядок: bootstrap (20) — ПЕРВЫЙ remote-заход; после него Ansible ходит
 # automation-пользователем по ключу. agent-up каждая цель зацепит сама —
 # ssh-add ключей произойдёт один раз (повторные вызовы no-op).
-provision: 10-local-init 20-bootstrap-access 30-server-base 40-server-access 50-server-security 60-webserver verify
+provision: 10-local-init 20-bootstrap-access 30-server-base 40-server-access 50-server-security 60-webserver verify ## Настройка чистого сервера целиком (10 → 60 + verify)
 
 # deploy — первый вывод приложения (код → TLS → очереди → проверка).
 # В отличие от provision чаще запускается ПО ШАГАМ: 70-release — многократно
 # (каждая выкладка), 80-certbot — единожды/редко, 90-queue — после release.
 # Комбинированная цель фиксирует канонический порядок первого прогона.
-deploy: 70-release 80-certbot 90-queue verify
+deploy: 70-release 80-certbot 90-queue verify ## Первый вывод приложения (70 → 80 → 90 + verify); дальше — по шагам
 
 # =============================================================================
 # Vault
@@ -125,9 +125,13 @@ syntax-check:
 inventory-graph:
 	ansible-inventory -i inventory/hosts.yml --graph -vvvv
 
+# `-h` обязателен: $(MAKEFILE_LIST) содержит несколько файлов (Makefile, .env,
+# environments.mk — все include'ы), а grep при 2+ файлах префиксует каждую
+# строку именем файла — awk тогда режет по первому `:` и вместо имени цели
+# выводит «Makefile». Сортировка оставлена: номера целей = порядок пайплайна.
 help:  ## Показать список команд
-	@grep -E '^[a-zA-Z0-9_-]+:.*?##' $(MAKEFILE_LIST) | sort \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?##' $(MAKEFILE_LIST) | sort \
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}'
 
 # =============================================================================
 # Для справки
