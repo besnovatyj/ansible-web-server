@@ -23,15 +23,15 @@ make galaxy-install   # коллекции community.mysql, community.crypto
 
 ## 2. Конфигурация перед первым запуском
 
-| Файл | Что задать |
-|---|---|
-| `.env` | `DOMAIN=<домен>` — ⚠ вручную синхронизировать с `domain_name` (make не читает yaml) |
-| `inventory/hosts.yml` | `ansible_host:` — IP сервера (файл в .gitignore; при отсутствии скопировать из `hosts.yml.example`) |
-| `inventory/group_vars/all/main.yml` | `domain_name` (= `DOMAIN`), `time_zone`; поддомены — в `app_hosts` (main/adm/files, из них собираются nginx-vhosts и `/run/secrets/*_HOST`) |
-| `inventory/group_vars/all/webserver.yml` | `mysql_db_name`, `mysql_db_user`, `certbot_email`; воркеры очередей: `queue_workers_count` + лимиты RAM/CPU |
-| `inventory/group_vars/all/ssh.yml` | `server_users` (аккаунты на сервере), `target_ssh_port` |
-| `environments.mk` | `AGENT_KEYS` — ⚠ по строке на каждый ключ из `server_users` + emergency |
-| Секреты | см. раздел 3 |
+| Файл                                     | Что задать                                                                                                                                  |
+|------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| `.env`                                   | `DOMAIN=<домен>` — ⚠ вручную синхронизировать с `domain_name` (make не читает yaml)                                                         |
+| `inventory/hosts.yml`                    | `ansible_host:` — IP сервера (файл в .gitignore; при отсутствии скопировать из `hosts.yml.example`)                                         |
+| `inventory/group_vars/all/main.yml`      | `domain_name` (= `DOMAIN`), `time_zone`; поддомены — в `app_hosts` (main/adm/files, из них собираются nginx-vhosts и `/run/secrets/*_HOST`) |
+| `inventory/group_vars/all/webserver.yml` | `mysql_db_name`, `mysql_db_user`, `certbot_email`; воркеры очередей: `queue_workers_count` + лимиты RAM/CPU                                 |
+| `inventory/group_vars/all/ssh.yml`       | `server_users` (аккаунты на сервере), `target_ssh_port`                                                                                     |
+| `environments.mk`                        | `AGENT_KEYS` — ⚠ по строке на каждый ключ из `server_users` + emergency                                                                     |
+| Секреты                                  | см. раздел 3                                                                                                                                |
 
 Прочее в `group_vars/all/` обычно не трогается: `security.yml` — fail2ban
 (тайминги, включённость jail'ов), `vault.yml` — маппинг `vault_*` → публичные
@@ -48,15 +48,15 @@ make galaxy-install   # коллекции community.mysql, community.crypto
 1. Пароль vault → `secrets/!vault_pass.txt` (образец — `!vault_pass.txt.example`; путь прописан в ansible.cfg).
 2. `cp secrets/secrets.yml.example secrets/secrets.yml`, заполнить:
 
-| Переменная | Что это |
-|---|---|
-| `vault_root_password` | пароль root от провайдера — нужен только 20-bootstrap-access |
-| `vault_ssh_key_passphrase` | passphrase emergency-ключа root (только для ручного аварийного входа) |
-| `vault_user_ansible_passphrase` | passphrase automation-ключа (им ходит Ansible через ssh-agent) |
-| `vault_user_<name>_password` / `_passphrase` | на каждого `type: human` из `server_users` |
-| `vault_mysql_root_password`, `vault_mysql_db_user_password` | MySQL |
-| `vault_redis_password` | Redis (`requirepass`) |
-| `vault_altcha_hmac_key` | `openssl rand -hex 32`; ⚠ менять НЕЛЬЗЯ после прода — сбросит challenge |
+| Переменная                                                  | Что это                                                                 |
+|-------------------------------------------------------------|-------------------------------------------------------------------------|
+| `vault_root_password`                                       | пароль root от провайдера — нужен только 20-bootstrap-access            |
+| `vault_ssh_key_passphrase`                                  | passphrase emergency-ключа root (только для ручного аварийного входа)   |
+| `vault_user_ansible_passphrase`                             | passphrase automation-ключа (им ходит Ansible через ssh-agent)          |
+| `vault_user_<name>_password` / `_passphrase`                | на каждого `type: human` из `server_users`                              |
+| `vault_mysql_root_password`, `vault_mysql_db_user_password` | MySQL                                                                   |
+| `vault_redis_password`                                      | Redis (`requirepass`)                                                   |
+| `vault_altcha_hmac_key`                                     | `openssl rand -hex 32`; ⚠ менять НЕЛЬЗЯ после прода — сбросит challenge |
 
 3. `make vault-encrypt` → зашифрованный `inventory/group_vars/all/secrets`.
    Правка позже: `make vault-edit`, просмотр: `make vault-view`.
@@ -86,14 +86,14 @@ make agent-down    # убить агент, удалить .agent.env
 make provision   # = 10 → 20 → 30 → 40 → 50 → 60 → verify, обычно целиком
 ```
 
-| Цель | Что делает |
-|---|---|
-| `10-local-init` | локально: генерация ключей + known_hosts (агент не нужен) |
+| Цель                  | Что делает                                                                                                             |
+|-----------------------|------------------------------------------------------------------------------------------------------------------------|
+| `10-local-init`       | локально: генерация ключей + known_hosts (агент не нужен)                                                              |
 | `20-bootstrap-access` | юзеры + доставка ключей по паролю root — ЕДИНСТВЕННЫЙ парольный заход; идемпотентен (если ключ уже работает — пропуск) |
-| `30-server-base` | ОС: apt, локали, swap, systemd |
-| `40-server-access` | journald для SSH + verify входов всех ключей |
-| `50-server-security` | UFW, sshd hardening (пароль отключается ЗДЕСЬ), unattended-upgrades, fail2ban |
-| `60-webserver` | Redis, Memcached, MySQL, Nginx, PHP + composer, секреты приложения в `/run/secrets` |
+| `30-server-base`      | ОС: apt, локали, swap, systemd                                                                                         |
+| `40-server-access`    | journald для SSH + verify входов всех ключей                                                                           |
+| `50-server-security`  | UFW, sshd hardening (пароль отключается ЗДЕСЬ), unattended-upgrades, fail2ban                                          |
+| `60-webserver`        | Redis, Memcached, MySQL, Nginx, PHP + composer, секреты приложения в `/run/secrets`                                    |
 
 ---
 
@@ -105,15 +105,15 @@ make deploy      # = 70-release → 80-certbot → 90-queue → verify (кано
 
 Чаще запускается по шагам:
 
-| Цель | Что делает / когда |
-|---|---|
-| `70-release` | git clone/pull из GitHub + composer install + php init; **это же — каждая последующая выкладка** |
-| `70-release-db` | то же + импорт `mysql_dump/dump.sql` — ⚠ РАЗРУШИТЕЛЬНО, перезаписывает БД |
-| `80-certbot` | сертификаты Let's Encrypt. Предусловие: DNS **всех** доменов (main, www, adm, files) указывает на сервер — pre-flight проверит каждый сам |
-| `80-certbot-staging` | выпуск против staging CA — отладка DNS/пайплайна без расхода прод-квот (сертификат недоверенный) |
-| `80-certbot-force` | принудительный боевой перевыпуск — разово ПОСЛЕ staging-теста |
-| `90-queue` | systemd-воркеры yii-queue@N; строго после `70-release` (pre-flight проверит) |
-| `verify` | комплексная проверка: SSH/sshd-политика, сервисы, PHP-модули, UFW/fail2ban, HTTP(S)-probe. До certbot отсутствие HTTPS прогон не валит |
+| Цель                 | Что делает / когда                                                                                                                        |
+|----------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| `70-release`         | git clone/pull из GitHub + composer install + php init; **это же — каждая последующая выкладка**                                          |
+| `70-release-db`      | то же + импорт `mysql_dump/dump.sql` — ⚠ РАЗРУШИТЕЛЬНО, перезаписывает БД                                                                 |
+| `80-certbot`         | сертификаты Let's Encrypt. Предусловие: DNS **всех** доменов (main, www, adm, files) указывает на сервер — pre-flight проверит каждый сам |
+| `80-certbot-staging` | выпуск против staging CA — отладка DNS/пайплайна без расхода прод-квот (сертификат недоверенный)                                          |
+| `80-certbot-force`   | принудительный боевой перевыпуск — разово ПОСЛЕ staging-теста                                                                             |
+| `90-queue`           | systemd-воркеры yii-queue@N; строго после `70-release` (pre-flight проверит)                                                              |
+| `verify`             | комплексная проверка: SSH/sshd-политика, сервисы, PHP-модули, UFW/fail2ban, HTTP(S)-probe. До certbot отсутствие HTTPS прогон не валит    |
 
 ---
 
