@@ -5,6 +5,8 @@
 #   kp_passphrase — passphrase из vault. Пустая строка недопустима по политике
 #                   (даже automation-ключ защищён passphrase, разлочивается
 #                   через ssh-agent — см. main.yml).
+#   kp_comment    — комментарий ключа (пишется в .pub, видно в ssh-agent/Pageant).
+#                   Обновляется только при (пере)генерации ключа (force_key_regen).
 #
 # Логика идентична прежней (на пару ordinary/emergency), вынесена сюда ради
 # цикла по server_users.
@@ -59,6 +61,7 @@
     type: "{{ ssh_key_type }}"  # ed25519 или rsa
     size: "{{ ssh_key_size }}"  # 0 для ed25519, 4096 для rsa
     passphrase: "{{ kp_passphrase }}"  # обязательно из vault — пустая строка запрещена политикой
+    comment: "{{ kp_comment }}"  # метка ключа (пишется в .pub, видна в ssh-agent/Pageant); меняется только при (пере)генерации
     force: "{{ force_key_regen | default(false) }}"  # Перезаписывать только если force=true
     state: present
   when:

@@ -46,6 +46,8 @@
     kp_path: "{{ local_ssh_keys_dir }}/key_{{ domain_name }}_{{ su.name }}"
     # Passphrase у ВСЕХ ключей — из соответствующей vault-переменной.
     kp_passphrase: "{{ lookup('vars', su.key_passphrase_vault_key) }}"
+    # Комментарий для опознания ключа в ssh-agent/Pageant.
+    kp_comment: "{{ su.name }}@{{ domain_name }}"
 
 # Аварийная пара ключей для root (passphrase из vault; Ansible ею не ходит).
 - name: Generate emergency root keypair
@@ -54,3 +56,4 @@
     kp_label: "emergency root"
     kp_path: "{{ emergency_key_path }}"
     kp_passphrase: "{{ emergency_key_passphrase }}"
+    kp_comment: "emergency-root@{{ domain_name }}"
