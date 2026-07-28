@@ -29,6 +29,24 @@
     state: directory
     mode: '0755'
 
+# Восстановление после прерванного dpkg, чтобы роль можно было перезапускать
+# на «грязном» сервере (предыдущий прогон упал/сервер ребутнулся посреди
+# конфигурации пакета). Без этого apt-get падает с
+# "dpkg was interrupted, you must manually run 'sudo dpkg --configure -a'".
+# Идемпотентно: на здоровой системе команда печатает пусто и мгновенно выходит,
+# поэтому changed_when завязан на непустой вывод. environment глушит needrestart,
+# т.к. --configure может дособрать пакеты и дёрнуть whiptail.
+- name: Recover from interrupted dpkg (idempotent)
+  become: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    NEEDRESTART_MODE: a
+    NEEDRESTART_SUSPEND: '1'
+  ansible.builtin.command:
+    cmd: dpkg --configure -a
+  register: dpkg_configure
+  changed_when: dpkg_configure.stdout | trim | length > 0
+
 # Обновление кэша APT.
 # force_apt_get: true — КЛЮЧЕВОЕ. Без него модуль идёт через python-apt, который
 # на слабом vCPU перестраивает бинарный кэш (/var/cache/apt/*.bin) с нуля и
