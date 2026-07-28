@@ -1,75 +1,94 @@
 ---
-# Ждём освобождения dpkg/apt-lock ДО apt-операций (а не только перед reboot).
-# Это гонка с apt-daily.timer / unattended-upgrades: фоновый таймер может
-# держать lock к моменту запуска плейбука. Модуль apt со своим lock_timeout
-# в теории должен ждать, но на практике поведение зависит от версии Ansible
-# и от того, какой именно lock держит конкурент (lock-frontend / lock /
-# lists/lock). Явное ожидание здесь = детерминированное поведение и понятная
-# ошибка вместо тихого зависания apt.
-# become: true обязателен — без sudo fuser не видит процессы под root и
-# мог давать ложное «lock свободен», пока apt-daily реально его держит.
-- name: Wait for system apt locks to be released (bounded, pre-apt)
+# Гасим источник гонки за dpkg-локом в самом начале.
+# На свежем сервере фоновые apt-daily.timer / unattended-upgrades могут держать
+# lock-frontend в момент запуска плейбука. Останавливаем и таймеры (чтобы не
+# перезапустили службу посреди нашей работы), и сами службы.
+# Модуль systemd вместо shell по конвенции проекта. failed_when: false —
+# это best-effort: на минимальном образе какого-то юнита может не быть, и это
+# не повод падать. После reboot службы поднимутся сами — их состояние по
+# умолчанию мы не трогаем (в проде unattended-upgrades нужен включённым).
+- name: Stop background APT services and timers (kill lock races at the source)
   become: true
-  ansible.builtin.command:
-    cmd: timeout 300 bash -c 'while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock >/dev/null 2>&1; do sleep 5; done'
-  register: dpkg_lock_wait_pre
-  changed_when: false
-  failed_when: dpkg_lock_wait_pre.rc != 0
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+    - apt-daily.service
+    - apt-daily-upgrade.service
+    - unattended-upgrades.service
+  failed_when: false
 
+# Дешёвая страховка от "No such file or directory" на урезанных образах.
+# Обычно apt создаёт partial/ сам, но каталог ничего не стоит гарантировать.
+- name: Ensure APT lists directory structure exists
+  become: true
+  ansible.builtin.file:
+    path: /var/lib/apt/lists/partial
+    state: directory
+    mode: '0755'
+
+# Обновление кэша APT.
+# force_apt_get: true — КЛЮЧЕВОЕ. Без него модуль идёт через python-apt, который
+# на слабом vCPU перестраивает бинарный кэш (/var/cache/apt/*.bin) с нуля и
+# упирается в CPU на несколько минут (одно ядро в 100%), из-за чего плейбук
+# «зависал». Ветка apt-get этого не делает и отрабатывает за ~20 секунд.
+# lock_timeout: 300 — честное ожидание fcntl-лока dpkg силами самого apt-get
+# (-o DPkg::Lock::Timeout=300): добирает остаточные in-flight операции
+# (например, apt от cloud-init), которые мог не покрыть systemctl stop выше.
+# async/poll — жёсткий потолок: если операция всё же зависнет, роль упадёт
+# через 10 минут с ошибкой, а не повиснет навсегда.
 - name: Update APT package cache
   become: true
-  apt:
-    update_cache: yes # обновляет кэш APT (список доступных пакетов)
-    cache_valid_time: 86400  # One day (кэш обновляется, только если он старше 24 часов (идемпотентность))
-    lock_timeout: 300  # ждать dpkg/apt-lock до 5 мин (гонка с unattended-upgrades/apt-daily.timer), затем чёткая ошибка
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 86400   # идемпотентность: не обновлять кэш свежее суток
+    force_apt_get: true
+    lock_timeout: 300
+  async: 600
+  poll: 5
 
-# Главная причина «нулевой активности» на Ubuntu 22.04/24.04 — это needrestart,
-# который запускается ПОСЛЕ установки пакетов и через whiptail UI спрашивает,
-# какие демоны перезапустить. В неинтерактивной сессии без NEEDRESTART_MODE=a
-# и NEEDRESTART_SUSPEND=1 он молча висит, пока кто-то не нажмёт Enter.
-# DEBIAN_FRONTEND / DEBIAN_PRIORITY этого НЕ покрывают.
-#
-# dpkg_options=force-confdef,force-confold — автоответ на conffile-prompts
-# (иначе dpkg может остановиться на вопросе «использовать новую версию
-# /etc/...» при апгрейде пакетов с изменёнными conffiles).
-# force_apt_get=true — детерминированно используем apt-get, а не aptitude
-# (aptitude может быть не установлен, или вести себя иначе).
-# async/poll — жёсткий таймаут на ВЕСЬ таск: при истинном зависании Ansible
-# вернёт failed через 30 минут, а не повесит плейбук навсегда. Это страховка
-# на случай, если какой-то ещё постустановочный хук решит интерактивно
-# что-то спросить — мы хотя бы узнаем об этом и не потеряем сутки.
-- name: Install security updates only
+# Безопасный апгрейд уже установленных пакетов (upgrade: safe = apt upgrade,
+# без удаления пакетов и без full-upgrade). only_upgrade: не тянуть новые пакеты.
+# ВНИМАНИЕ про security-only: ограничить апгрейд одним security-pocket через
+# default_release: "<release>-security" НЕЛЬЗЯ — в deb822 (ubuntu.sources) это
+# не отдельный релиз, а suite внутри общего источника, и apt отвергает такое
+# значение APT::Default-Release ("... is not available in the sources").
+# Поэтому апгрейд идёт по всем подключённым репозиториям; на свежесозданном
+# сервере это и есть ожидаемое «догнать пакеты до актуальных».
+# environment (needrestart/DEBIAN_FRONTEND) — главный источник «тихого зависания»
+# на Ubuntu 22.04/24.04: needrestart после установки пакетов через whiptail
+# спрашивает, какие демоны перезапустить, и в неинтерактивной сессии молча ждёт
+# Enter. NEEDRESTART_MODE=a + NEEDRESTART_SUSPEND=1 полностью его глушат;
+# DEBIAN_FRONTEND=noninteractive этого НЕ покрывает.
+# dpkg_options force-confdef,force-confold — автоответ на conffile-промпты,
+# иначе dpkg может встать на вопросе о перезаписи /etc/*.
+# force_apt_get: детерминированно apt-get, а не aptitude (которого может не быть).
+# async 1800/poll 15 — потолок 30 мин на весь апгрейд; poll>0 значит Ansible
+# ждёт завершения синхронно, поэтому дальше dpkg уже точно свободен.
+- name: Upgrade installed packages (safe)
   become: true
   environment:
     DEBIAN_FRONTEND: noninteractive
     APT_LISTCHANGES_FRONTEND: none
     DEBIAN_PRIORITY: critical
-    NEEDRESTART_MODE: a       # 'a' = автоматически перезапустить сервисы, без whiptail
-    NEEDRESTART_SUSPEND: '1'  # двойной пояс: совсем выключить needrestart на время apt
-  apt:
-    upgrade: safe  # Безопасное обновление, не удаляет пакеты (выполняет обновление установленных пакетов без удаления или установки новых зависимостей (аналог apt upgrade, а не apt full-upgrade).)
-    only_upgrade: true  # Только обновление установленных пакетов (обновляет только уже установленные пакеты, не добавляя новых.)
-    default_release: "{{ ansible_distribution_release }}-security"  # Только security-репозиторий (ограничивает обновления только пакетами из security-репозитория Ubuntu (например, noble-security для Ubuntu 24.04). Это минимизирует изменения, так как применяются только патчи безопасности. `{{ ansible_distribution_release }}` - факт ансибл, указывать вручную не нужно)
-    lock_timeout: 300  # см. комментарий выше
-    force_apt_get: true  # детерминированно apt-get вместо aptitude
-    dpkg_options: 'force-confdef,force-confold'  # автоответ dpkg на вопрос о conffiles
-  register: apt_update_result # для отладки, если нужно проверить, какие пакеты обновились.
-  async: 1800  # макс. 30 мин на весь таск — спасает от любого нового интерактива/хук-зависания
-  poll: 15     # опрашивать статус раз в 15 сек
+    NEEDRESTART_MODE: a
+    NEEDRESTART_SUSPEND: '1'
+  ansible.builtin.apt:
+    upgrade: safe
+    only_upgrade: true
+    force_apt_get: true
+    dpkg_options: 'force-confdef,force-confold'
+    lock_timeout: 300
+  register: apt_update_result
+  async: 1800
+  poll: 15
 
-# Перед reboot убеждаемся, что dpkg не в середине операции (иначе ребут
-# посреди установки пакета). Раньше это был БЕЗУСЛОВНЫЙ цикл без таймаута →
-# вечный hang при удержании lock. Теперь — ограничен 5 минутами, при
-# превышении стадия падает с понятным сообщением (перезапустить позже),
-# а не виснет и не ребутит сервер во время операции apt.
-- name: Wait for system apt locks to be released (bounded)
-  become: true
-  ansible.builtin.command:
-    cmd: timeout 300 bash -c 'while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done'
-  register: dpkg_lock_wait
-  changed_when: false
-  failed_when: dpkg_lock_wait.rc != 0
-
+# Перезагрузка только если пакеты её потребовали (ядро/libc и т.п.).
+# Отдельного ожидания лока перед reboot не нужно: apt-таск выше синхронный
+# (poll>0) и вернулся только после завершения dpkg, а фоновые службы мы
+# остановили в самом начале — грабить лок больше некому.
 - name: Check if reboot is required
   become: true
   ansible.builtin.stat:
@@ -79,27 +98,13 @@
 - name: Reboot server if needed
   become: true
   ansible.builtin.reboot:
-    # Не время ожидания по умолчанию, а максимальное время ожидания, Ansible периодически пингует сервер.
-    # Модуль ansible.builtin.reboot после команды reboot в цикле опрашивает хост и выполняет test_command
-    # (по умолчанию whoami), и возвращается сразу, как только сервер ответил.
     reboot_timeout: 900
-    post_reboot_delay: 15 # (по умолчанию 0) пауза перед попытками подключения — сеть/sshd успевают подняться
+    post_reboot_delay: 15   # даём sshd/сети подняться перед реконнектом
   when: reboot_required.stat.exists
 
-# WORKAROUND Ansible #79992: модуль reboot после перезагрузки зацикливается на
-# протухшем persistent SSH-мастере (ControlPersist) и сам не переподключается.
-# Принудительно сбрасываем кэш соединения, чтобы последующие роли 30-server-base
-# (locales/swap/systemd) шли по свежему сокету, а не ждали истечения ControlPersist.
-# meta: reset_connection НЕ поддерживает when — ставим безусловно: при пропущенном
-# ребуте это дешёвый сброс здорового соединения (переустановится на следующем таске).
+# WORKAROUND Ansible #79992: после reboot модуль может зациклиться на протухшем
+# SSH-соединении. Принудительно сбрасываем его, чтобы следующие роли шли по
+# свежему сокету. meta нельзя ставить под when — при пропущенном ребуте это
+# просто дешёвый сброс здорового соединения.
 - name: Reset SSH connection after potential reboot (Ansible #79992)
-  meta: reset_connection
-
-# Полное обновление, включая все дистрибутивы, может поломать что-нибудь
-#- name: Update APT package cache
-#  become: true
-#  apt:
-#    update_cache: yes
-#    upgrade: dist  # Полное обновление
-#    state: latest
-#    cache_valid_time: 86400 #One day
+  ansible.builtin.meta: reset_connection
