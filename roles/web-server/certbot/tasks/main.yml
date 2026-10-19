@@ -1,9 +1,20 @@
 ---
--   name: Install certbot + nginx plugin
+# Certbot только выпускает и продлевает сертификат, конфиг nginx он НЕ трогает:
+#   certonly --webroot   проверка HTTP-01 через файлы в acme_webroot, которые отдают все
+#                        vhost по /.well-known/acme-challenge/ (роль nginx);
+#   443-блоки, редирект и настройки TLS рисует шаблон роли nginx, когда сертификат есть
+#   (80-certbot после выпуска перерисовывает vhost: include_role nginx, tasks_from: sites).
+#
+# Почему не `certbot --nginx`: он правил тот же файл, который перезаписывает 60-webserver, —
+# повторный прогон 60 снимал HTTPS. И он подключал свой options-ssl-nginx.conf, который не
+# принадлежит этому проекту и годами «стареет» вместе с пакетом: так на старых серверах остались
+# TLS 1.0/1.1 и шифры без Forward Secrecy, а устройства Apple перестали открывать сайт
+# (/workspace/TODO/Certbot/Certbot.md, readme-TODO.md «Анализ: не повторится ли …»).
+
+-   name: Install certbot
     apt:
       name:
         - certbot
-        - python3-certbot-nginx
       state: present
       update_cache: yes
 
@@ -15,6 +26,28 @@
                        | flatten
                        | map('regex_replace', '^(.+)$', '-d \1')
                        | join(' ') }}
+
+# Сервер, где сертификат когда-то выпускался прежней схемой (`certbot --nginx`): в настройках
+# продления записан установщик nginx, и certbot.timer при продлении снова полез бы править конфиг.
+# Переводить такой сертификат автоматически не берусь — команда не проверялась на живом сервере.
+-   name: Read renewal config of existing certificate
+    slurp:
+      src: "/etc/letsencrypt/renewal/{{ domain_name }}.conf"
+    register: certbot_renewal_conf
+    failed_when: false
+
+-   name: Refuse legacy nginx-installer certificate
+    assert:
+      that:
+        - "'installer = nginx' not in (certbot_renewal_conf.content | default('') | b64decode)"
+      fail_msg: |
+        Сертификат {{ domain_name }} выпущен прежней схемой (certbot --nginx): в
+        /etc/letsencrypt/renewal/{{ domain_name }}.conf записан installer = nginx.
+        Перевести его на webroot один раз вручную на сервере (НЕ ПРОВЕРЕНО, сверить с `certbot --help reconfigure`):
+          sudo certbot reconfigure --cert-name {{ domain_name }} --webroot -w {{ acme_webroot }} \
+               --deploy-hook "systemctl reload nginx"
+        и убедиться, что строки installer = nginx в файле больше нет. Либо выпустить заново:
+          удалить сертификат (`sudo certbot delete --cert-name {{ domain_name }}`) и повторить 80-certbot.
 
 # Идемпотентность и защита от rate-limit Let's Encrypt — на стороне самого
 # certbot, НЕ через `creates:` (старый файловый гард был хрупок: имя lineage
@@ -31,21 +64,25 @@
 #                                  (--expand неявно при non-interactive) —
 #                                  лечит молчаливое недопокрытие при добавлении
 #                                  vhost. Перевыпуск только у истечения.
+#   --deploy-hook                  записывается в настройки продления: certbot.timer после
+#                                  каждого продления перезагружает nginx, иначе тот до
+#                                  перезапуска отдавал бы старый (истекающий) сертификат.
 #   --staging                      см. defaults/main.yml (certbot_staging).
--   name: Request Let's Encrypt certificates
+-   name: Request Let's Encrypt certificate
     command: >
-      certbot --nginx --non-interactive --agree-tos
+      certbot certonly --webroot --webroot-path {{ acme_webroot }}
+              --non-interactive --agree-tos
               -m {{ certbot_email }}
               --cert-name {{ domain_name }}
               --keep-until-expiring
+              --deploy-hook "systemctl reload nginx"
               {{ '--staging' if certbot_staging | bool else '' }}
               {{ '--force-renewal' if certbot_force_renewal | bool else '' }}
               {{ certbot_domains_args }}
     register: certbot_run
-    # Успех любого реального действия (выпуск / обновление / расширение) certbot
-    # печатает "Congratulations". Путь "Certificate not yet due for renewal;
-    # no action taken" — без него → корректно not changed.
-    changed_when: "'Congratulations' in certbot_run.stdout"
+    # certonly при выпуске / продлении / расширении печатает "Successfully received certificate".
+    # Путь "Certificate not yet due for renewal; no action taken" — без него → not changed.
+    changed_when: "'Successfully received certificate' in certbot_run.stdout"
 
 -   name: Ensure certbot renew timer is enabled
     systemd:

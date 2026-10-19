@@ -1,0 +1,26 @@
+{#
+  Виртуальный хост type: static — только файлы, PHP запрещён. Домен статики приложения.
+#}
+{% import '_vhost.j2' as vhost with context %}
+# {{ ansible_managed }}
+# Сайт «{{ site.name }}» (type: static) — inventory/group_vars/all/nginx_sites.yml
+
+{{ vhost.redirect(site) }}
+server {
+{{ vhost.listen() }}
+    server_name {{ site.server_name }};
+    root        {{ site.web_root }};
+    charset     utf-8;
+
+    client_max_body_size {{ site.client_max_body_size }};
+
+{{ vhost.headers(site) }}
+{{ vhost.acme() }}
+{{ vhost.deny_hidden() }}
+{{ vhost.static_cache(site) }}
+    # PHP здесь не исполняется ни при каких условиях: загруженный в статику .php отдать
+    # исходником тоже нельзя.
+    location ~ \.php$ {
+        deny all;
+    }
+}

@@ -1,0 +1,52 @@
+{#
+  Виртуальный хост type: php — файлы + фронт-контроллер PHP (try_files … /index.php → php-fpm).
+  Фронтэнд, админка, REST API: различия между ними — данные сайта из inventory (nginx_sites).
+#}
+{% import '_vhost.j2' as vhost with context %}
+# {{ ansible_managed }}
+# Сайт «{{ site.name }}» (type: php) — inventory/group_vars/all/nginx_sites.yml
+
+{{ vhost.redirect(site) }}
+server {
+{{ vhost.listen() }}
+    server_name {{ site.server_name }};
+    root        {{ site.web_root }};
+    index       index.php;
+    charset     utf-8;
+
+    client_max_body_size {{ site.client_max_body_size }};
+
+{{ vhost.headers(site) }}
+{{ vhost.acme() }}
+{{ vhost.deny_hidden() }}
+{{ vhost.static_cache(site) }}
+{% if site.cors_preflight %}
+    # Предварительный запрос CORS: ответ без тела, заголовки Access-Control-* — из headers сайта
+    # (add_header … always действует и на этот ответ).
+    if ($request_method = OPTIONS) {
+        return 204;
+    }
+
+{% endif %}
+    location / {
+        # Всё, что не настоящий файл, — во фронт-контроллер. $is_args добавляет «?» только при
+        # наличии аргументов.
+        try_files $uri $uri/ /index.php$is_args$args;
+    }
+
+    location ~ \.php$ {
+        # Защита от подмены path_info
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+        fastcgi_param SSL_PROTOCOL $ssl_protocol; # Для модуля info
+        fastcgi_param SSL_CIPHER   $ssl_cipher;   # Для модуля info
+        try_files $uri =404;
+        fastcgi_read_timeout {{ site.fastcgi_timeout }};
+        fastcgi_connect_timeout {{ site.fastcgi_timeout }};
+        fastcgi_send_timeout {{ site.fastcgi_timeout }};
+    }
+}

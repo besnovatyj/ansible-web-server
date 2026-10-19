@@ -10,7 +10,7 @@
 domain_name: bes-demo.ru
 
 # Хосты трёх доменов приложения — единый источник правды. Отсюда их берут:
-#   • nginx  — server_name в nginx_sites (webserver.yml);
+#   • nginx  — server_name в nginx_sites (nginx_sites.yml);
 #   • app_secrets → файлы /run/secrets/{MAIN,ADM,FILES}_HOST, которые читает
 #     Besnovatyj\Helpers\SecretReader::get() в конфигах приложения (params-local).
 # Меняешь поддомен ЗДЕСЬ — синхронно меняется и nginx-vhost, и секреты приложения.

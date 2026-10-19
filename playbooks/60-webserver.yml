@@ -7,7 +7,8 @@
 # 1) Redis **с паролем** (`requirepass`)
 # 2) Memcached
 # 3) MySQL (install + secure + setup)
-# 4) Nginx (3 server block)
+# 4) Nginx: виртуальные хосты из nginx_sites (inventory/group_vars/all/nginx_sites.yml),
+#    шаблон по типу сайта (php | static); после 80-certbot — сразу с HTTPS
 # 5) PHP 8.4 + модули + FPM pool
 # 6) Composer (для release-роли, 70-release)
 # 7) Очистка `apt_clean`
@@ -96,6 +97,44 @@
         host: 127.0.0.1
         timeout: 5
         state: started
+
+    # Каждый сайт реально отдаёт заголовки безопасности — и на странице, и на статике (прежний
+    # конфиг терял их на css/js/картинках из-за add_header в location). Запрос — на сам сервер
+    # с нужным Host (--resolve), DNS не нужен. До 80-certbot сайты на 80, после — на 443.
+    - name: Stat TLS certificate (HTTP or HTTPS probe)
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+      register: probe_cert
+
+    - name: Fetch response headers of every site (page and a static file)
+      ansible.builtin.command: >-
+        curl -sk -o /dev/null -D - --max-time 10
+             --resolve {{ item.0.server_name.split(' ')[0] }}:{{ probe_port }}:127.0.0.1
+             {{ probe_scheme }}://{{ item.0.server_name.split(' ')[0] }}{{ item.1 }}
+      vars:
+        probe_scheme: "{{ 'https' if probe_cert.stat.exists else 'http' }}"
+        probe_port: "{{ 443 if probe_cert.stat.exists else 80 }}"
+      register: site_headers
+      changed_when: false
+      loop: "{{ nginx_sites | product(['/', '/__probe__.css']) | list }}"
+      loop_control:
+        label: "{{ item.0.name }}{{ item.1 }}"
+
+    - name: Assert security headers are present
+      assert:
+        that:
+          - item.stdout is search('(?im)^x-content-type-options:\s*nosniff')
+          - >-
+            (item.item.0.csp_mode | default('off')) not in ['report-only', 'enforce']
+            or item.stdout is search('(?im)^content-security-policy')
+        fail_msg: |
+          {{ item.item.0.name }}{{ item.item.1 }}: нет заголовков безопасности
+          (X-Content-Type-Options{{ ' и Content-Security-Policy' if (item.item.0.csp_mode | default('off')) != 'off' else '' }}).
+          Ответ:
+          {{ item.stdout }}
+      loop: "{{ site_headers.results }}"
+      loop_control:
+        label: "{{ item.item.0.name }}{{ item.item.1 }}"
 
     # Роль composer: бинарник реально доступен (нужен release-роли 70-release).
     - name: Assert Composer is available

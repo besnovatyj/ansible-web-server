@@ -1,0 +1,173 @@
+---
+##########################################################
+# NGINX: САЙТЫ (виртуальные хосты)
+##########################################################
+#
+# Здесь всё, чем сайты отличаются друг от друга. Роль `web-server/nginx` знает только два
+# механизма nginx — шаблон на каждый `type` — и не знает ни имён поддоменов, ни частей
+# приложения, ни политик безопасности сайта:
+#
+#   type: php     файлы + фронт-контроллер PHP (try_files … /index.php → php-fpm):
+#                 фронтэнд, админка, будущий REST API;
+#   type: static  только файлы, PHP запрещён: домен статики.
+#
+# `name` — только имя файла конфига (/etc/nginx/sites-available/<domain_name>-<name>.conf),
+# на поведение не влияет. Поддомен задаётся одним `server_name` (из app_hosts в main.yml):
+# переименование домена статики — правка app_hosts.files, а не роли.
+#
+# Значения по умолчанию для любого ключа — `nginx_site_defaults` в
+# roles/web-server/nginx/defaults/main.yml. Сайт указывает только то, чем отличается.
+#
+# Ключи сайта:
+#   name, type, server_name, web_root     обязательные
+#   client_max_body_size                  лимит тела запроса (загрузки)
+#   fastcgi_timeout                       таймауты php-fpm (только type: php)
+#   static_cache                          срок кэша картинок/шрифтов/css/js (expires); null — без кэша
+#   cors_preflight                        отвечать 204 на OPTIONS (REST API; только type: php)
+#   headers                               заголовки сайта поверх nginx_default_headers роли;
+#                                         значение null убирает заголовок по умолчанию
+#   csp_mode                              off | report-only | enforce
+#   csp                                   CSP: директива → список источников ([] — директива без значений)
+#
+# Все сайты попадают в ОДИН сертификат Let's Encrypt (роль certbot собирает -d из server_name),
+# поэтому каждый домен должен смотреть в DNS на этот сервер — иначе 80-certbot остановится на
+# pre-flight.
+#
+# CSP перенесена из dev-конфига (app/docker/development/nginx/templates/default.conf.template):
+# там же собираются отчёты (Report-Only) и правится список, сюда — переносится.
+##########################################################
+
+nginx_sites:
+  - name: front
+    type: php
+    server_name: "{{ app_hosts.main }} www.{{ app_hosts.main }}"
+    web_root: "{{ web_root }}/{{ domain_name }}/frontend/pub"
+    client_max_body_size: 10M # На всякий случай, вдруг вложение к письму потом разрешим
+    csp_mode: report-only
+    csp:
+      default-src: ["'self'"]
+      script-src:
+        - "'self'"
+        - "'unsafe-inline'"
+        - https://www.google.com
+        - https://www.gstatic.com
+        - https://api-maps.yandex.ru
+        - https://*.api-maps.yandex.ru
+        - https://yastatic.net
+        - https://suggest-maps.yandex.ru
+      style-src:
+        - "'self'"
+        - "'unsafe-inline'"
+        - https://fonts.googleapis.com
+        - https://api-maps.yandex.ru
+        - https://*.api-maps.yandex.ru
+        - https://yastatic.net
+      img-src:
+        - "'self'"
+        - "https://{{ app_hosts.files }}"
+        - "data:"
+        - "https:"
+        - https://api-maps.yandex.ru
+        - https://*.api-maps.yandex.ru
+        - https://*.maps.yandex.net
+        - https://yastatic.net
+      font-src: ["'self'", "data:", https://fonts.gstatic.com]
+      connect-src:
+        - "'self'"
+        - https://www.google.com
+        - https://api-maps.yandex.ru
+        - https://*.api-maps.yandex.ru
+        - https://*.maps.yandex.net
+        - https://suggest-maps.yandex.ru
+        - https://search-maps.yandex.ru
+        - https://api.routing.yandex.net
+      media-src: ["'self'", "https://{{ app_hosts.files }}"]
+      object-src: ["'none'"]
+      worker-src:
+        - "'self'"
+        - "blob:"
+        - "data:"
+        - https://api-maps.yandex.ru
+        - https://*.api-maps.yandex.ru
+        - https://yastatic.net
+      frame-src:
+        - https://www.google.com
+        - https://www.youtube.com
+        - https://rutube.ru
+        - https://vk.com
+        - https://player.vimeo.com
+        - "https://{{ app_hosts.main }}"
+      frame-ancestors: ["'self'"]
+      base-uri: ["'self'"]
+      form-action: ["'self'"]
+      upgrade-insecure-requests: []
+      report-uri: ["https://{{ app_hosts.main }}/csp-report"]
+
+  - name: adm
+    type: php
+    server_name: "{{ app_hosts.adm }}"
+    web_root: "{{ web_root }}/{{ domain_name }}/backend/pub"
+    client_max_body_size: 700M # Загружаем только в админке, здесь самый большой лимит
+    fastcgi_timeout: 300s      # Импорт, обработка изображений, архивы файлового менеджера
+    csp_mode: report-only
+    csp:
+      default-src: ["'self'"]
+      script-src: ["'self'", "'unsafe-inline'", https://cdnjs.cloudflare.com, https://www.google.com, https://www.gstatic.com]
+      style-src: ["'self'", "'unsafe-inline'", https://fonts.googleapis.com]
+      img-src: ["'self'", "https://{{ app_hosts.files }}", "data:", "https:", "blob:"]
+      font-src: ["'self'", "data:", https://fonts.gstatic.com]
+      connect-src: ["'self'", https://www.google.com]
+      media-src: ["'self'", "https://{{ app_hosts.files }}"]
+      object-src: ["'none'"]
+      worker-src: ["'self'", "blob:"]
+      frame-src:
+        - https://www.google.com
+        - https://www.youtube.com
+        - https://rutube.ru
+        - https://vk.com
+        - https://player.vimeo.com
+        - "https://{{ app_hosts.adm }}"
+      frame-ancestors: ["'self'"]
+      base-uri: ["'self'"]
+      form-action: ["'self'"]
+      upgrade-insecure-requests: []
+      report-uri: ["https://{{ app_hosts.main }}/csp-report"]
+
+  - name: files
+    type: static
+    server_name: "{{ app_hosts.files }}"
+    web_root: "{{ web_root }}/{{ domain_name }}/static"
+    client_max_body_size: 1M # Просто ограничение, здесь нет PHP и скриптов, только отдаёт статику
+    # CSP у домена статики, как и в dev, нет: файлы встраиваются страницами фронта и админки,
+    # а их политика — у тех доменов.
+
+  # REST API — когда появится (в dev уже есть: REST_HOST). Добавить хост в app_hosts (main.yml)
+  # и раскомментировать:
+  # - name: rest
+  #   type: php
+  #   server_name: "{{ app_hosts.rest }}"
+  #   web_root: "{{ web_root }}/{{ domain_name }}/rest/pub"
+  #   client_max_body_size: 10M
+  #   static_cache: null
+  #   cors_preflight: true
+  #   headers:
+  #     Access-Control-Allow-Origin: "https://{{ app_hosts.adm }}"
+  #     Access-Control-Allow-Methods: "GET, POST, PUT, DELETE, OPTIONS"
+  #     Access-Control-Allow-Headers: "Content-Type, Authorization"
+  #   csp_mode: report-only
+  #   csp:
+  #     default-src: ["'self'"]
+  #     frame-src: ["'none'"]
+  #     frame-ancestors: ["'none'"]
+  #     object-src: ["'none'"]
+  #     base-uri: ["'self'"]
+  #     form-action: ["'self'"]
+  #     report-uri: ["https://{{ app_hosts.main }}/csp-report"]
+
+##########################################################
+# Каталог проверок Let's Encrypt (HTTP-01, webroot)
+##########################################################
+# Общий для всех сайтов: каждый vhost отдаёт /.well-known/acme-challenge/ отсюда, certbot
+# кладёт сюда токены. Вне корня релиза намеренно: роль release чистит скелет web-корней
+# перед первым клоном, а этот каталог должен переживать любые выкладки.
+acme_webroot: "{{ web_root }}/letsencrypt"

@@ -1,0 +1,108 @@
+{#
+  Общие части виртуальных хостов. Подключаются в vhost-php.conf.j2 и vhost-static.conf.j2:
+      {% import '_vhost.j2' as vhost with context %}
+  `with context` обязателен: макросы читают nginx_tls_enabled, acme_webroot и прочие переменные.
+
+  Здесь только механика nginx, ничего о конкретном сайте: всё, чем сайты различаются, приходит
+  в `site` из inventory (nginx_sites), слитым с nginx_site_defaults.
+#}
+
+{#- Строки listen основного server: 443 с TLS, пока сертификата нет — 80. ──────────────────────
+    HTTP/2 зависит от версии nginx (tasks/sites.yml определяет её на сервере):
+      < 1.25.1  — параметр строки listen (`listen 443 ssl http2`), отдельной директивы нет;
+      ≥ 1.25.1  — директива `http2 on`, параметр listen объявлен устаревшим.
+    Ubuntu 24.04 ставит 1.24, то есть первый вариант.
+    Сертификат — fullchain.pem: в нём и промежуточный сертификат Let's Encrypt. Только cert.pem
+    часть клиентов (iOS среди них) не может построить цепочку доверия. -#}
+{% macro listen() %}
+{% if nginx_tls_enabled %}
+    listen 443 ssl{{ '' if nginx_http2_directive else ' http2' }};
+{% if nginx_listen_ipv6 | bool %}
+    listen [::]:443 ssl{{ '' if nginx_http2_directive else ' http2' }};
+{% endif %}
+{% if nginx_http2_directive %}
+    http2 on;
+{% endif %}
+    ssl_certificate     /etc/letsencrypt/live/{{ nginx_tls_cert_name }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ nginx_tls_cert_name }}/privkey.pem;
+{% else %}
+    listen 80;
+{% if nginx_listen_ipv6 | bool %}
+    listen [::]:80;
+{% endif %}
+{% endif %}
+{% endmacro %}
+
+{#- Проверка Let's Encrypt (HTTP-01). ──────────────────────────────────────────────────────────
+    ^~ — чтобы регулярные location сайта (запрет скрытых файлов, кэш статики) этот путь
+    не перехватили. -#}
+{% macro acme() %}
+    location ^~ /.well-known/acme-challenge/ {
+        root {{ acme_webroot }};
+        default_type text/plain;
+        try_files $uri =404;
+    }
+{% endmacro %}
+
+{#- Порт 80, когда сертификат уже есть: только проверки Let's Encrypt (продление идёт по HTTP)
+    и редирект на HTTPS. Заголовков безопасности здесь нет намеренно: ответ — только редирект. -#}
+{% macro redirect(site) %}
+{% if nginx_tls_enabled %}
+server {
+    listen 80;
+{% if nginx_listen_ipv6 | bool %}
+    listen [::]:80;
+{% endif %}
+    server_name {{ site.server_name }};
+
+{{ acme() }}
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+{% endif %}
+{% endmacro %}
+
+{#- Заголовки сайта. ────────────────────────────────────────────────────────────────────────────
+    Все с `always`: без него nginx отдаёт add_header только на 2xx/3xx, а страницы ошибок
+    остаются без защиты.
+    ⚠ Наследование add_header в nginx: заголовки уровня server доходят до location, ТОЛЬКО если
+    в самом location нет ни одного add_header. Поэтому в location шаблонов add_header не
+    ставится вовсе (кэш статики — через `expires`, он сам пишет Cache-Control). Понадобится
+    add_header в location — повторить там и этот макрос. -#}
+{% macro headers(site) %}
+{% set ns = namespace(list=[]) %}
+{% for name, value in (nginx_default_headers | combine(site.headers)).items() %}
+{% if value is not none and value | string | length > 0 %}
+    add_header {{ name }} "{{ value | string | replace('"', '\\"') }}" always;
+{% endif %}
+{% endfor %}
+{% if site.csp_mode in ['report-only', 'enforce'] and site.csp %}
+{% for directive, sources in site.csp.items() %}
+{% set ns.list = ns.list + [directive ~ ((' ' ~ (sources | join(' '))) if sources else '')] %}
+{% endfor %}
+    add_header {{ 'Content-Security-Policy-Report-Only' if site.csp_mode == 'report-only' else 'Content-Security-Policy' }} "{{ ns.list | join('; ') }}" always;
+{% endif %}
+{% if nginx_tls_enabled and nginx_hsts %}
+    add_header Strict-Transport-Security "{{ nginx_hsts }}" always;
+{% endif %}
+{% endmacro %}
+
+{#- Запрет служебных файлов и каталогов, начинающихся с точки: .git, .env, .htaccess и т.п.
+    Выражение перенесено из прежнего шаблона как есть. -#}
+{% macro deny_hidden() %}
+    location ~ /\.(ht|svn|git|env|json|lock|yml) {
+        deny all;
+    }
+{% endmacro %}
+
+{#- Долгий кэш статики. Только `expires` — он и есть Cache-Control (см. headers). -#}
+{% macro static_cache(site) %}
+{% if site.static_cache %}
+    location ~* \.(jpg|jpeg|png|gif|webp|avif|ico|css|js|woff|woff2|ttf|svg|eot|otf|ttc)$ {
+        expires {{ site.static_cache }};
+        access_log off;
+    }
+{% endif %}
+{% endmacro %}

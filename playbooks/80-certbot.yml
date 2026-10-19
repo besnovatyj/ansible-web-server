@@ -1,23 +1,36 @@
 ##########################################################
 #
-# **Цель**: Получить SSL-сертификаты Let's Encrypt и переписать конфиг Nginx на HTTPS.
+# **Цель**: Получить сертификат Let's Encrypt и перевести сайты на HTTPS.
 #           (TLS (после DNS))
 #
 # 80-certbot: Let's Encrypt сертификаты
-# 1) Устанавливает certbot + python3-certbot-nginx
-# 2) Получает сертификаты для всех доменов из `nginx_sites[*].server_name`
-# 3) Запускает `certbot --nginx --non-interactive --agree-tos -m {{ certbot_email }} -d ...` — Certbot сам редактирует Nginx
-# 4) Регистрирует systemd certbot.timer
+# 1) Pre-flight: DNS каждого домена из `nginx_sites[*].server_name` (A и AAAA) указывает на этот сервер
+# 2) Устанавливает certbot, выпускает ОДИН сертификат на все домены:
+#    `certbot certonly --webroot` — certbot конфиг nginx НЕ трогает
+# 3) Перерисовывает vhost роли nginx: шаблон видит сертификат и рисует 443 (TLS 1.2/1.3, HTTP/2),
+#    80 оставляет под проверки Let's Encrypt и редирект на HTTPS
+# 4) Регистрирует systemd certbot.timer (продление + reload nginx через deploy-hook)
+# 5) Post-checks: то, на чём ломались устройства Apple (/workspace/TODO/Certbot/Certbot.md), —
+#    TLS 1.0/1.1 выключены, Forward Secrecy, fullchain, цепочка, HTTP/2 — на каждом домене
 #
 # Запускать после 60-webserver и настройки DNS.
 # Предусловия для запуска: 60-webserver успешно прошёл, DNS ВСЕХ доменов из
-# nginx_sites (main + www, adm, files) указывает на этот сервер — pre-flight
-# ниже проверяет каждый домен через dig сам.
+# nginx_sites указывает на этот сервер — pre-flight ниже проверяет каждый домен через dig сам.
 ##########################################################
 ---
 -   name: Pre-flight checks for 80-certbot
     hosts: site
-    gather_facts: false
+    # Нужны IPv6-адреса сервера (ansible_all_ipv6_addresses) для проверки AAAA, поэтому
+    # pre-flight теперь ходит на сервер и ему нужен пользователь, как остальным плеям.
+    remote_user: "{{ ssh_automation_user }}"
+    gather_facts: true
+    gather_subset:
+      - network
+    vars:
+      certbot_domains: >-
+        {{ nginx_sites | map(attribute='server_name')
+                       | map('split', ' ')
+                       | flatten | unique | list }}
     tasks:
       # Certbot выпускает ОДИН сертификат на все server_name из nginx_sites
       # (роль certbot, certbot_domains_args) — незаведённый в DNS поддомен
@@ -25,13 +38,11 @@
       # {{ domain_name }}. Выражение зеркалит роль — единый источник правды.
       -   name: Resolve every certbot domain (DNS check)
           delegate_to: localhost
+          become: false
           command: dig +short {{ item }}
           register: dns_checks
           changed_when: false
-          loop: >-
-            {{ nginx_sites | map(attribute='server_name')
-                           | map('split', ' ')
-                           | flatten | unique | list }}
+          loop: "{{ certbot_domains }}"
 
       # `in stdout_lines`, а не `== stdout`: при CNAME dig +short печатает
       # цепочку (имя цели CNAME + конечный A) в несколько строк — точное
@@ -48,20 +59,62 @@
           loop_control:
             label: "{{ item.item }}"
 
+      # AAAA-запись, которая указывает не на этот сервер, — тихий отказ: Let's Encrypt проверяет
+      # домен по IPv6, если запись есть, а телефоны в мобильных сетях предпочитают IPv6 и до сайта
+      # не доходят, хотя с компьютера по IPv4 «всё открывается». Записи нет — это нормально.
+      -   name: Resolve AAAA of every certbot domain
+          delegate_to: localhost
+          become: false
+          command: dig +short AAAA {{ item }}
+          register: dns_aaaa_checks
+          changed_when: false
+          loop: "{{ certbot_domains }}"
+
+      -   name: Assert AAAA records (if any) point to this server
+          assert:
+            that:
+              - >-
+                item.stdout_lines | select('match', '^[0-9a-fA-F:]+$') | list
+                | difference(ansible_all_ipv6_addresses | default([])) | length == 0
+            fail_msg: |
+              У {{ item.item }} есть AAAA-запись «{{ item.stdout_lines | select('match', '^[0-9a-fA-F:]+$') | join(', ') }}»,
+              а IPv6-адреса сервера: {{ ansible_all_ipv6_addresses | default([]) | join(', ') or '(нет)' }}.
+              Либо поправь AAAA на адрес сервера, либо удали её. Иначе Let's Encrypt не проверит домен,
+              а устройства с IPv6 (телефоны в мобильной сети) не откроют сайт.
+          loop: "{{ dns_aaaa_checks.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+
 -   name: 80-certbot - Certbot
     hosts: site
     remote_user: "{{ ssh_automation_user }}"
     become: true
     roles:
       - web-server/certbot
+    tasks:
+      # Сертификат появился → шаблон vhost рисует 443 и редирект. Та же задача, что в 60-webserver,
+      # поэтому оба плейбука сходятся к одному конфигу в любом порядке повторных прогонов.
+      -   name: Render HTTPS virtual hosts
+          include_role:
+            name: web-server/nginx
+            tasks_from: sites
 
-# Post-conditions: сертификат выпущен и certbot не сломал конфиг nginx
-# (он редактирует /etc/nginx сам — обязательно перепроверяем). См. TODO/000-NOTES.MD.
+      -   name: Apply nginx changes before post-checks
+          meta: flush_handlers
+
+# Post-conditions: сертификат выпущен, nginx отдаёт его правильно на КАЖДОМ домене.
+# Повторяет /workspace/TODO/Certbot/check_certbot_tls.sh, только с самого сервера (127.0.0.1 + SNI),
+# поэтому от внешней сети и DNS не зависит. См. также TODO/000-NOTES.MD.
 -   name: 80-certbot - Post-checks
     hosts: site
     remote_user: "{{ ssh_automation_user }}"
     become: true
     gather_facts: false
+    vars:
+      certbot_domains: >-
+        {{ nginx_sites | map(attribute='server_name')
+                       | map('split', ' ')
+                       | flatten | unique | list }}
     tasks:
       -   name: Stat Let's Encrypt fullchain
           ansible.builtin.stat:
@@ -76,8 +129,90 @@
               Сертификат /etc/letsencrypt/live/{{ domain_name }}/fullchain.pem
               не найден — certbot не выпустил сертификат.
 
-      -   name: Validate nginx config after certbot rewrite
+      -   name: Validate nginx config
           command: nginx -t
           register: nginx_t
           changed_when: false
           failed_when: nginx_t.rc != 0
+
+      # TLS 1.0/1.1 проверяем по итоговому конфигу, а не попыткой рукопожатия: OpenSSL 3 на самом
+      # сервере сам отказывается от TLS 1.0, и неудачное рукопожатие ничего не доказало бы.
+      -   name: Dump effective nginx config
+          command: nginx -T
+          register: nginx_full
+          changed_when: false
+
+      -   name: Assert only TLS 1.2 and 1.3 are enabled
+          assert:
+            that:
+              - nginx_full.stdout_lines | select('match', '^\s*ssl_protocols\s') | list | length > 0
+              - >-
+                nginx_full.stdout_lines | select('match', '^\s*ssl_protocols\s')
+                | select('search', 'TLSv1(\s|;)|TLSv1\.1|SSLv') | list | length == 0
+            fail_msg: >-
+              В конфиге nginx разрешены старые протоколы (TLS 1.0/1.1 или SSL) — устройства Apple
+              оборвут соединение. Проверь ssl_protocols: `nginx -T | grep ssl_protocols`.
+
+      -   name: TLS 1.2 handshake with full chain
+          command: >-
+            openssl s_client -connect 127.0.0.1:443 -servername {{ item }}
+                    -tls1_2 -showcerts -verify_hostname {{ item }}
+          args:
+            stdin: ""
+          register: tls12
+          changed_when: false
+          failed_when: false
+          loop: "{{ certbot_domains }}"
+
+      -   name: Assert TLS 1.2, Forward Secrecy, fullchain and trust chain
+          assert:
+            that:
+              - item.rc == 0
+              - item.stdout is search('Cipher\s*(is|:)\s*(ECDHE|TLS_AES|TLS_CHACHA)')
+              - item.stdout.split('BEGIN CERTIFICATE') | length > 2
+              - certbot_staging | default(false) | bool or item.stdout is search('Verify return code: 0 ')
+            fail_msg: |
+              {{ item.item }}: TLS 1.2 не в порядке. Нужны: рукопожатие, шифр с Forward Secrecy (ECDHE),
+              в ответе два и более сертификата (fullchain.pem, а не cert.pem), «Verify return code: 0».
+              {{ item.stdout_lines | select('search', 'Cipher|Verify return code') | join('\n') }}
+          loop: "{{ tls12.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+
+      -   name: TLS 1.3 handshake
+          command: openssl s_client -connect 127.0.0.1:443 -servername {{ item }} -tls1_3
+          args:
+            stdin: ""
+          register: tls13
+          changed_when: false
+          failed_when: false
+          loop: "{{ certbot_domains }}"
+
+      -   name: Assert TLS 1.3 works
+          assert:
+            that:
+              - item.rc == 0
+            fail_msg: "{{ item.item }}: TLS 1.3 не согласуется."
+          loop: "{{ tls13.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+
+      -   name: HTTP/2 negotiation (ALPN)
+          command: openssl s_client -connect 127.0.0.1:443 -servername {{ item }} -alpn h2,http/1.1
+          args:
+            stdin: ""
+          register: alpn
+          changed_when: false
+          failed_when: false
+          loop: "{{ certbot_domains }}"
+
+      -   name: Assert HTTP/2 is negotiated
+          assert:
+            that:
+              - item.stdout is search('ALPN protocol: h2')
+            fail_msg: >-
+              {{ item.item }}: HTTP/2 не согласован. Проверь listen 443 в
+              /etc/nginx/sites-available/ и версию nginx (http2 в listen до 1.25.1, `http2 on` после).
+          loop: "{{ alpn.results }}"
+          loop_control:
+            label: "{{ item.item }}"

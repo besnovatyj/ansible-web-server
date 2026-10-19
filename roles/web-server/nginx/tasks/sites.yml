@@ -1,0 +1,156 @@
+---
+##########################################################
+# Виртуальные хосты
+##########################################################
+# Вызывается из main.yml (60-webserver) и из 80-certbot после выпуска сертификата
+# (include_role: web-server/nginx, tasks_from: sites).
+#
+# На каждый сайт из nginx_sites — свой файл /etc/nginx/sites-available/<domain_name>-<name>.conf
+# по шаблону его типа (vhost-php / vhost-static). Плюс сервер по умолчанию 00-default.conf.
+# Пока сертификата нет, сайты слушают 80; есть — 443 с HTTP/2, а 80 только отдаёт проверки
+# Let's Encrypt и редиректит на HTTPS. Повторный прогон 60-webserver поэтому ничего не ломает:
+# шаблон сам видит сертификат и рисует 443, certbot конфиг nginx не правит.
+##########################################################
+
+# HTTP/2 в nginx до 1.25.1 включается параметром строки listen, начиная с 1.25.1 — директивой
+# `http2 on` (параметр listen объявлен устаревшим). Ubuntu 24.04 ставит 1.24, но версию берём
+# фактическую, чтобы обновление пакета не сломало конфиг.
+- name: Detect nginx version
+  ansible.builtin.command: nginx -v
+  register: nginx_version_out
+  changed_when: false
+  check_mode: false
+
+- name: Check whether TLS certificate exists
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ nginx_tls_cert_name }}/fullchain.pem"
+  register: nginx_tls_cert
+
+- name: Set facts for vhost templates
+  ansible.builtin.set_fact:
+    nginx_version: "{{ nginx_version_out.stderr | regex_search('nginx/([0-9.]+)', '\\1') | first }}"
+    nginx_tls_enabled: "{{ nginx_tls_cert.stat.exists }}"
+
+- name: Set HTTP/2 syntax for detected nginx version
+  ansible.builtin.set_fact:
+    nginx_http2_directive: "{{ nginx_version is version('1.25.1', '>=') }}"
+
+- name: Validate nginx_sites
+  ansible.builtin.assert:
+    that:
+      - item.name is defined and item.name is match('^[a-z0-9-]+$')
+      - item.type is defined and item.type in ['php', 'static']
+      - item.server_name is defined and item.server_name | length > 0
+      - item.web_root is defined and item.web_root | length > 0
+    fail_msg: >-
+      nginx_sites: у сайта «{{ item.name | default('?') }}» нет обязательного ключа или он
+      неверен. Нужны name (латиница, цифры, дефис), type (php | static), server_name, web_root —
+      см. inventory/group_vars/all/nginx_sites.yml.
+    quiet: true
+  loop: "{{ nginx_sites }}"
+  loop_control:
+    label: "{{ item.name | default('?') }}"
+
+# Только гарантия существования (nginx-у для чтения хватает 0755 root:root,
+# которые даст umask). owner/mode НЕ задаём: после релиза (70-release) каталогами
+# владеет деплой-модель роли release (код — ansible, writable — setgid
+# ansible:www-data), и повторный прогон 60-webserver не должен её перетирать.
+- name: Create web roots for all configured nginx sites
+  ansible.builtin.file:
+    path: "{{ item.web_root }}"
+    state: directory
+  loop: "{{ nginx_sites }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+# Сюда certbot (certonly --webroot) кладёт токены проверки, все сайты отдают их по
+# /.well-known/acme-challenge/. Вне корня релиза — см. acme_webroot в inventory.
+- name: Create ACME challenge webroot
+  ansible.builtin.file:
+    path: "{{ acme_webroot }}"
+    state: directory
+    mode: 0755
+
+- name: Render default server
+  ansible.builtin.template:
+    src: default-server.conf.j2
+    dest: /etc/nginx/sites-available/00-default.conf
+    owner: root
+    group: root
+    mode: 0644
+  notify: Reload nginx
+
+- name: Enable default server
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/00-default.conf
+    dest: /etc/nginx/sites-enabled/00-default.conf
+    state: link
+  notify: Reload nginx
+
+# Стандартный сайт пакета nginx тоже объявляет default_server на 80 — вместе с нашим nginx -t
+# не пройдёт. Убирается только ссылка в sites-enabled, сам файл пакета остаётся.
+- name: Disable stock Ubuntu default site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+- name: Render virtual hosts
+  ansible.builtin.template:
+    src: "vhost-{{ item.type }}.conf.j2"
+    dest: "/etc/nginx/sites-available/{{ domain_name }}-{{ item.name }}.conf"
+    owner: root
+    group: root
+    mode: 0644
+  vars:
+    site: "{{ nginx_site_defaults | combine(item) }}"
+  loop: "{{ nginx_sites }}"
+  loop_control:
+    label: "{{ item.name }} ({{ item.type }})"
+  notify: Reload nginx
+
+- name: Enable virtual hosts
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ domain_name }}-{{ item.name }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ domain_name }}-{{ item.name }}.conf"
+    state: link
+  loop: "{{ nginx_sites }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Reload nginx
+
+# Файлы этого домена, которых больше нет в nginx_sites: сайт убрали из inventory или файл
+# остался от прежней раскладки роли (один общий <domain_name>.conf на все сайты). Их server_name
+# совпали бы с новыми, и nginx -t упал бы на дублях. Затрагиваются только файлы с префиксом
+# домена — чужие сайты на сервере не трогаются.
+- name: Find vhost files of this domain
+  ansible.builtin.find:
+    paths:
+      - /etc/nginx/sites-available
+      - /etc/nginx/sites-enabled
+    patterns:
+      - "{{ domain_name }}.conf"
+      - "{{ domain_name }}-*.conf"
+    file_type: any
+  register: nginx_domain_files
+
+- name: Remove vhost files not in nginx_sites
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ nginx_domain_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when: item.path | basename not in nginx_managed_vhosts
+  vars:
+    nginx_managed_vhosts: >-
+      {{ nginx_sites | map(attribute='name')
+                     | map('regex_replace', '^(.*)$', domain_name ~ '-\1.conf')
+                     | list }}
+  notify: Reload nginx
+
+# До хендлеров: сломанный конфиг роняет прогон здесь, а работающий nginx остаётся на старом.
+- name: Test Nginx configuration
+  ansible.builtin.command: nginx -t
+  check_mode: no
+  changed_when: false

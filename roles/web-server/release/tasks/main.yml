@@ -49,8 +49,9 @@
 
 # Пустой скелет web-корней, созданный ролью nginx до первого релиза
 # ({frontend,backend}/pub, static), мешает git clone. Файлов в нём
-# нет (assert выше это гарантирует), certbot работает через --nginx-плагин
-# и в web-корнях ничего не хранит — удаление безопасно. После первого клона
+# нет (assert выше это гарантирует), certbot хранит токены проверки в
+# отдельном acme_webroot вне релиза (certonly --webroot) и в web-корнях
+# ничего не хранит — удаление безопасно. После первого клона
 # .git существует и задача не выполняется.
 - name: Remove empty directory skeleton before initial clone
   ansible.builtin.file:

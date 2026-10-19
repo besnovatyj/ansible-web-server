@@ -11,3 +11,9 @@
     state: restarted
     daemon_reload: yes
 
+# Виртуальные хосты меняются без разрыва соединений: reload перечитывает конфиг, старые
+# рабочие процессы дообслуживают свои запросы.
+- name: Reload nginx
+  ansible.builtin.systemd:
+    name: nginx
+    state: reloaded

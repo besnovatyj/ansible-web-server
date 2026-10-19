@@ -17,34 +17,6 @@
     backup: yes
   notify: Restart nginx
 
-# Только гарантия существования (nginx-у для чтения хватает 0755 root:root,
-# которые даст umask). owner/mode НЕ задаём: после релиза (70-release) каталогами
-# владеет деплой-модель роли release (код — ansible, writable — setgid
-# ansible:www-data), и повторный прогон 60-webserver не должен её перетирать.
-- name: Create web roots for all configured nginx sites
-  ansible.builtin.file:
-    path: "{{ item.web_root }}"
-    state: directory
-  loop: "{{ nginx_sites }}"
-  loop_control:
-    label: "{{ item.name }}"
-
-- name: Copy host settings
-  ansible.builtin.template:
-    src: site.tmp.j2
-    dest: "/etc/nginx/sites-available/{{ domain_name }}.conf"
-    owner: root
-    group: root
-    mode: 0644
-  notify: Restart nginx
-
-- name: Create host available to enabled symbolic link
-  ansible.builtin.file:
-    src: "/etc/nginx/sites-available/{{ domain_name }}.conf"
-    dest: "/etc/nginx/sites-enabled/{{ domain_name }}.conf"
-    state: link
-  notify: Restart nginx
-
 # Создаём директорию для файла перезаписи настроек `systemd unit` для nginx
 - name: Create nginx systemd override directory
   ansible.builtin.file:
@@ -65,11 +37,11 @@
     mode: 0644
   notify: Restart nginx
 
-- name: Test Nginx configuration
-  ansible.builtin.command: nginx -t
-  check_mode: no
-  changed_when: false
-  notify: Restart nginx
+# Виртуальные хосты (nginx_sites из inventory) + сервер по умолчанию + nginx -t.
+# Отдельным файлом, потому что их же перерисовывает 80-certbot после выпуска сертификата
+# (include_role … tasks_from: sites): появляется 443 и редирект с 80.
+- name: Virtual hosts
+  ansible.builtin.include_tasks: sites.yml
 
 # Добавьте отладочную задачу для вывода статуса Nginx в случае сбоя nginx -t:
 #- name: Debug Nginx configuration test failure

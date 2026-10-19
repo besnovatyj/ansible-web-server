@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+#
+# Сервер по умолчанию: запросы с чужим или пустым Host (сканеры по IP, чужие домены, указанные
+# на наш IP) закрываются без ответа (444), а не попадают в первый по алфавиту сайт.
+# По HTTPS такие соединения обрываются ещё на рукопожатии (ssl_reject_handshake): сертификат
+# сайта не показывается в ответ на произвольное имя.
+#
+# Заменяет стандартный сайт Ubuntu (sites-enabled/default) — его ссылку роль убирает:
+# два default_server на одном порту nginx не примет.
+
+server {
+    listen 80 default_server;
+{% if nginx_listen_ipv6 | bool %}
+    listen [::]:80 default_server;
+{% endif %}
+    server_name _;
+    return 444;
+}
+{% if nginx_tls_enabled %}
+
+server {
+    listen 443 ssl default_server{{ '' if nginx_http2_directive else ' http2' }};
+{% if nginx_listen_ipv6 | bool %}
+    listen [::]:443 ssl default_server{{ '' if nginx_http2_directive else ' http2' }};
+{% endif %}
+    server_name _;
+    ssl_reject_handshake on;
+}
+{% endif %}

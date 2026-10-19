@@ -63,22 +63,8 @@ certbot_email: 'name@domain.zone'
 # NGINX SITES
 ##########################################################
 
-nginx_sites:
-  - name: frontend
-    server_name: "{{ app_hosts.main }} www.{{ app_hosts.main }}"
-    web_root: "{{ web_root }}/{{ domain_name }}/frontend/pub"
-    client_max_body_size: 10M # На всякий случай, вдруг вложение к письму потом разрешим
-    php_fpm: true
-  - name: backend
-    server_name: "{{ app_hosts.adm }}"
-    web_root: "{{ web_root }}/{{ domain_name }}/backend/pub"
-    client_max_body_size: 700M # Загружаем только в админке, здесь самый большой лимит
-    php_fpm: true
-  - name: static
-    server_name: "{{ app_hosts.files }}"
-    web_root: "{{ web_root }}/{{ domain_name }}/static"
-    client_max_body_size: 1M # Просто ограничение, здесь нет PHP и скриптов, только отдаёт статику
-    php_fpm: false
+# Сайты (nginx_sites) и каталог проверок Let's Encrypt (acme_webroot) — в nginx_sites.yml рядом:
+# там же CSP и прочие различия между поддоменами.
 
 ##########################################################
 # YII2 QUEUE WORKERS (90-queue)
